@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, ChefHat, PackageCheck, Database, User, ShoppingCart } from 'lucide-react';
+import { Home, ChefHat, PackageCheck, Database, User } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useOrderStore } from '../store/useOrderStore';
 
@@ -9,7 +9,6 @@ export function BottomNav({ onOpenOdooModal }: { onOpenOdooModal?: () => void })
   const location = useLocation();
   const { getTotalItems } = useCartStore();
   const { orders } = useOrderStore();
-  const totalCartItems = getTotalItems();
 
   const activeOrdersCount = orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled').length;
 
@@ -22,7 +21,7 @@ export function BottomNav({ onOpenOdooModal }: { onOpenOdooModal?: () => void })
   ];
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 bg-surface/95 backdrop-blur-lg border-t border-border px-2 py-2 shadow-lg pb-safe">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 backdrop-blur-lg border-t border-border px-2 py-2 shadow-lg pb-safe">
       <div className="flex items-center justify-around max-w-md mx-auto relative">
         {navItems.map((item) => {
           const Icon = item.icon;

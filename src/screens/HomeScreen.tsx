@@ -24,7 +24,6 @@ export function HomeScreen() {
 
   const { addItem, addBundle } = useCartStore();
   const { searchQuery, selectedCategory } = useSearchStore();
-  const { config } = useOdooStore();
 
   useEffect(() => {
     let isMounted = true;
@@ -71,16 +70,16 @@ export function HomeScreen() {
     <div className="min-h-screen bg-background pb-28 text-text-main">
       <Header onOpenOdooModal={() => setIsOdooModalOpen(true)} />
 
-      <main className="max-w-4xl mx-auto">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2">
         {/* Category Carousel */}
         <CategoryList />
 
         {/* Hero Integration Banner */}
         {!isFiltering && (
-          <section className="px-4 mb-6">
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 p-6 text-white shadow-xl border border-emerald-500/20">
-              <div className="relative z-10 max-w-md">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <section className="mb-8">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-emerald-500/20">
+              <div className="relative z-10 max-w-xl">
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-amber-300" /> Zity Chef × Odoo ERP
                   </span>
@@ -90,24 +89,24 @@ export function HomeScreen() {
                     </span>
                   )}
                 </div>
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-snug mb-2 text-white">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-snug mb-3 text-white">
                   Хоолны шинэхэн орцыг <br />
                   <span className="text-emerald-400">Zity Chef & Odoo</span>-р шууд хүргэнэ
                 </h1>
-                <p className="text-xs text-emerald-100/80 mb-4 line-clamp-2">
+                <p className="text-xs sm:text-sm text-emerald-100/80 mb-5 max-w-lg leading-relaxed">
                   Zity Chef-ийн хоолны жорын дагуу бэлтгэсэн орц багцууд болон өдөр тутмын хүнсний барааг 30 минутанд аваарай.
                 </p>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <button
                     onClick={() => navigate('/recipe-kits')}
-                    className="flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-slate-950 transition-all hover:bg-emerald-400 active:scale-95 shadow-md shadow-emerald-500/30"
+                    className="flex items-center gap-2 rounded-2xl bg-emerald-500 px-5 py-3 text-xs font-extrabold text-slate-950 transition-all hover:bg-emerald-400 active:scale-95 shadow-md shadow-emerald-500/30"
                   >
                     <ChefHat className="h-4 w-4" /> Хоолны Багцууд үзэх
                   </button>
                   <button
                     onClick={() => setIsOdooModalOpen(true)}
-                    className="flex items-center gap-1.5 rounded-2xl bg-white/10 px-3 py-2.5 text-xs font-bold text-white backdrop-blur-md hover:bg-white/20 transition-all"
+                    className="flex items-center gap-1.5 rounded-2xl bg-white/10 px-4 py-3 text-xs font-bold text-white backdrop-blur-md hover:bg-white/20 transition-all"
                   >
                     <Database className="h-3.5 w-3.5 text-emerald-300" /> Odoo Төлөв
                   </button>
@@ -115,35 +114,35 @@ export function HomeScreen() {
               </div>
 
               {/* Decorative Background Icons */}
-              <ChefHat className="absolute -right-6 -bottom-6 h-48 w-48 text-emerald-500/10 rotate-12 pointer-events-none" />
+              <ChefHat className="absolute -right-6 -bottom-6 h-56 w-56 text-emerald-500/10 rotate-12 pointer-events-none hidden sm:block" />
             </div>
           </section>
         )}
 
         {/* Featured Section: Zity Chef Recipe Bundles */}
         {!isFiltering && (
-          <section className="mb-8 px-4">
-            <div className="mb-3 flex items-center justify-between">
+          <section className="mb-10">
+            <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ChefHat className="h-5 w-5 text-emerald-500" />
-                <h2 className="text-base font-extrabold text-text-main">Zity Chef-ийн Санал (Орц Багц)</h2>
+                <h2 className="text-base sm:text-lg font-extrabold text-text-main">Zity Chef-ийн Санал (Орц Багц)</h2>
               </div>
               <button
                 onClick={() => navigate('/recipe-kits')}
-                className="text-xs font-bold text-emerald-600 flex items-center gap-1 hover:underline"
+                className="text-xs sm:text-sm font-bold text-emerald-600 flex items-center gap-1 hover:underline"
               >
-                Бүгдийг харах <ArrowRight className="h-3.5 w-3.5" />
+                Бүгдийг харах <ArrowRight className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {recipeKits.map((bundle) => (
                 <div
                   key={bundle.id}
-                  className="min-w-[290px] max-w-[310px] overflow-hidden rounded-3xl border border-border bg-surface shadow-xs hover:border-emerald-500/30 transition-all group flex flex-col justify-between"
+                  className="overflow-hidden rounded-3xl border border-border bg-surface shadow-xs hover:border-emerald-500/30 transition-all group flex flex-col justify-between"
                 >
                   <div>
-                    <div className="relative h-36 w-full overflow-hidden bg-surface-hover">
+                    <div className="relative h-44 w-full overflow-hidden bg-surface-hover">
                       <img
                         src={bundle.image}
                         alt={bundle.name}
@@ -154,28 +153,28 @@ export function HomeScreen() {
                         <ChefHat className="h-3 w-3" /> {bundle.servings} хүний порц
                       </div>
                       <div className="absolute bottom-3 left-3 text-white pr-3">
-                        <h3 className="font-bold text-sm leading-tight text-white">{bundle.name}</h3>
+                        <h3 className="font-bold text-sm sm:text-base leading-tight text-white">{bundle.name}</h3>
                         <p className="text-[11px] text-gray-300 line-clamp-1">{bundle.description}</p>
                       </div>
                     </div>
 
-                    <div className="p-3">
+                    <div className="p-4">
                       <div className="mb-2 flex items-center gap-2 text-[11px] text-text-muted">
-                        <span className="flex items-center gap-1 font-medium bg-surface-hover px-2 py-0.5 rounded-lg border border-border">
-                          <Clock className="h-3 w-3 text-emerald-500" /> {bundle.prepTime || '25 мин'}
+                        <span className="flex items-center gap-1 font-medium bg-surface-hover px-2.5 py-1 rounded-lg border border-border">
+                          <Clock className="h-3.5 w-3.5 text-emerald-500" /> {bundle.prepTime || '25 мин'}
                         </span>
-                        <span className="flex items-center gap-1 font-medium bg-surface-hover px-2 py-0.5 rounded-lg border border-border">
-                          <Layers className="h-3 w-3 text-amber-500" /> {bundle.productItems.length} орц
+                        <span className="flex items-center gap-1 font-medium bg-surface-hover px-2.5 py-1 rounded-lg border border-border">
+                          <Layers className="h-3.5 w-3.5 text-amber-500" /> {bundle.productItems.length} орц
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 pt-0">
+                  <div className="flex items-center justify-between p-4 pt-0">
                     <div>
                       {bundle.discountPrice ? (
                         <div className="flex items-baseline gap-1.5">
-                          <span className="font-extrabold text-base text-emerald-600">
+                          <span className="font-extrabold text-lg text-emerald-600">
                             {bundle.discountPrice.toLocaleString()}₮
                           </span>
                           <span className="text-xs text-text-muted line-through">
@@ -183,7 +182,7 @@ export function HomeScreen() {
                           </span>
                         </div>
                       ) : (
-                        <span className="font-extrabold text-base text-text-main">
+                        <span className="font-extrabold text-lg text-text-main">
                           {bundle.price.toLocaleString()}₮
                         </span>
                       )}
@@ -191,7 +190,7 @@ export function HomeScreen() {
 
                     <button
                       onClick={() => handleAddBundle(bundle)}
-                      className="flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-700 active:scale-95 shadow-md shadow-emerald-600/20"
+                      className="flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition-all hover:bg-emerald-700 active:scale-95 shadow-md shadow-emerald-600/20"
                     >
                       <Plus className="h-4 w-4" /> Сагслах
                     </button>
@@ -203,9 +202,9 @@ export function HomeScreen() {
         )}
 
         {/* Product Grid Header */}
-        <section className="px-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-extrabold text-text-main">
+        <section className="mb-10">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base sm:text-lg font-extrabold text-text-main">
               {searchQuery
                 ? `Хайлтын үр дүн (${filteredProducts.length})`
                 : selectedCategory
@@ -213,14 +212,14 @@ export function HomeScreen() {
                 : 'Odoo & Zity Chef Дэлгүүрийн Бараанууд'}
             </h2>
 
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-              <ShieldCheck className="h-3.5 w-3.5" /> Нөөц Идэвхтэй
+            <div className="flex items-center gap-1 text-xs font-bold text-emerald-600">
+              <ShieldCheck className="h-4 w-4" /> Live ERP Stock
             </div>
           </div>
 
-          {/* Product Cards Grid */}
+          {/* Product Cards Grid (Responsive Grid columns up to xl:6) */}
           {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
               {filteredProducts.map((product) => (
                 <ProductCard key={product.id} product={product} onClick={handleProductClick} />
               ))}
@@ -238,7 +237,7 @@ export function HomeScreen() {
       {/* Product Detail Bottom Sheet */}
       <BottomSheet isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)}>
         {selectedProduct && (
-          <div className="flex flex-col">
+          <div className="flex flex-col max-w-lg mx-auto">
             <div className="relative mb-4 aspect-square w-full overflow-hidden rounded-3xl bg-surface-hover border border-border">
               <img src={selectedProduct.image} alt={selectedProduct.name} className="h-full w-full object-cover" />
               {selectedProduct.sku && (
@@ -278,7 +277,7 @@ export function HomeScreen() {
                 <div className="col-span-2 flex items-start gap-2 rounded-2xl bg-surface-hover p-3 border border-border">
                   <Clock className="mt-0.5 h-4 w-4 text-emerald-500" />
                   <div>
-                    <div className="text-[10px] font-bold text-text-muted">Хугцаа & Хадгалалт</div>
+                    <div className="text-[10px] font-bold text-text-muted">Хугацаа & Хадгалалт</div>
                     <div className="text-xs font-medium text-text-main">{selectedProduct.expiration}</div>
                   </div>
                 </div>
