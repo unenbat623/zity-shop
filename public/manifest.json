@@ -1,0 +1,28 @@
+{
+  "name": "Zity Shop — Хоол & Хүнсний Хүргэлт",
+  "short_name": "Zity Shop",
+  "description": "Zity Chef & Odoo ERP-тэй холбогдсон Монголын тэргүүний хүнсний хүргэлтийн платформ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0F17",
+  "theme_color": "#0B0F17",
+  "orientation": "portrait-primary",
+  "lang": "mn",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "shopping", "lifestyle"],
+  "screenshots": []
+}

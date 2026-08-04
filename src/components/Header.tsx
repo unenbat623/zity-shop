@@ -29,23 +29,23 @@ export function Header({ onOpenOdooModal }: { onOpenOdooModal?: () => void }) {
 
   return (
     <header className="sticky top-0 z-30 bg-surface/90 px-4 pt-3 pb-3 backdrop-blur-md border-b border-border shadow-xs">
-      <div className="max-w-6xl mx-auto space-y-3">
+      <div className="max-w-7xl mx-auto space-y-3">
         {/* Top Banner Row */}
         <div className="flex items-center justify-between gap-4">
           {/* Brand logo & tagline */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-white shadow-md shadow-emerald-500/20 font-black text-xl shrink-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-emerald-500 text-white shadow-md shadow-purple-500/20 font-black text-xl shrink-0">
               Z
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-base tracking-tight text-text-main">ZITY SHOP</span>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-500/20">
-                  OFFICIAL
+                <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-500 border border-purple-500/20">
+                  CHEF ECOSYSTEM
                 </span>
               </div>
               <p className="text-[11px] text-text-muted flex items-center gap-1 font-medium hidden sm:flex">
-                <ChefHat className="h-3 w-3 text-emerald-500" /> Zity Chef & Odoo ERP Dynamic Integration
+                <ChefHat className="h-3.5 w-3.5 text-purple-400" /> Zity Chef & Odoo ERP Unified Standard
               </p>
             </div>
           </div>
@@ -61,7 +61,7 @@ export function Header({ onOpenOdooModal }: { onOpenOdooModal?: () => void }) {
                   onClick={() => navigate(link.path)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
                     isActive
-                      ? 'bg-emerald-600 text-white shadow-sm'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm'
                       : 'text-text-muted hover:text-text-main hover:bg-surface'
                   }`}
                 >

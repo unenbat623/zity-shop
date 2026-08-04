@@ -41,8 +41,8 @@ export function CategoryList() {
           onClick={() => setSelectedCategory(null)}
           className={`flex min-w-max flex-col items-center gap-1.5 px-4 py-2 rounded-2xl border font-bold text-xs transition-all ${
             !selectedCategory
-              ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/20'
-              : 'bg-surface border-border text-text-muted hover:border-emerald-500/30 hover:text-text-main'
+              ? 'bg-gradient-to-br from-indigo-600 to-emerald-600 border-transparent text-white shadow-md shadow-indigo-500/25'
+              : 'bg-surface border-border text-text-muted hover:border-indigo-400/40 hover:text-text-main'
           }`}
         >
           🛒 Бүгд
@@ -59,15 +59,15 @@ export function CategoryList() {
               <div
                 className={`flex h-14 w-14 items-center justify-center rounded-2xl border transition-all text-2xl hover:scale-105 active:scale-95 ${
                   isSelected
-                    ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/20 scale-105'
-                    : 'bg-surface border-border hover:bg-emerald-500/10 hover:border-emerald-500/30'
+                    ? 'bg-gradient-to-br from-indigo-600 to-emerald-600 border-transparent text-white shadow-md shadow-indigo-500/25 scale-105'
+                    : 'bg-surface border-border hover:bg-indigo-500/10 hover:border-indigo-400/30'
                 }`}
               >
                 {category.icon}
               </div>
               <span
                 className={`text-center text-[10px] font-bold line-clamp-2 leading-tight ${
-                  isSelected ? 'text-emerald-600' : 'text-text-muted'
+                  isSelected ? 'text-indigo-600' : 'text-text-muted'
                 }`}
               >
                 {category.name.split(',')[0]}
