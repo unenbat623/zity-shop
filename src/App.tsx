@@ -10,6 +10,7 @@ import { CheckoutScreen } from './screens/CheckoutScreen';
 import { OrdersScreen } from './screens/OrdersScreen';
 import { OrderDetailScreen } from './screens/OrderDetailScreen';
 import { RecipeKitsScreen } from './screens/RecipeKitsScreen';
+import { FridgeScreen } from './screens/FridgeScreen';
 import { OdooAdminScreen } from './screens/OdooAdminScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { useThemeStore } from './store/useThemeStore';
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/orders" element={<OrdersScreen />} />
         <Route path="/orders/:id" element={<OrderDetailScreen />} />
         <Route path="/recipe-kits" element={<RecipeKitsScreen />} />
+        <Route path="/zity-fridge" element={<FridgeScreen />} />
         <Route path="/odoo-admin" element={<OdooAdminScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
       </Routes>

@@ -4,10 +4,10 @@ import { MOCK_PRODUCTS } from '../constants/mockData';
 export class OdooService {
   private static instance: OdooService;
   private config: OdooConfig = {
-    url: 'https://odoo.zity.mn',
-    db: 'zity_delguur_db',
-    username: 'api_admin@zity.mn',
-    apiKey: 'odoo_secret_key_2026_xyz',
+    url: (import.meta as any).env?.VITE_ODOO_URL || 'https://odoo.zity.mn',
+    db: (import.meta as any).env?.VITE_ODOO_DB || 'zity_delguur_db',
+    username: (import.meta as any).env?.VITE_ODOO_USERNAME || 'api_admin@zity.mn',
+    apiKey: (import.meta as any).env?.VITE_ODOO_API_KEY || '',
     isConnected: true,
     autoSync: true,
     lastSyncTime: new Date().toISOString(),

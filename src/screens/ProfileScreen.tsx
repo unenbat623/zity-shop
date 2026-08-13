@@ -120,16 +120,24 @@ export function ProfileScreen() {
               </div>
             </div>
 
-            <button
-              onClick={toggleZityChefConnection}
-              className={`rounded-full px-3 py-1.5 text-[11px] font-extrabold transition-all active:scale-95 ${
-                user.isZityChefConnected
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  : 'bg-surface-hover border border-border text-text-main hover:bg-border'
-              }`}
-            >
-              {user.isZityChefConnected ? 'Идэвхтэй' : 'Холбох'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/zity-fridge')}
+                className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-extrabold text-emerald-700 border border-emerald-500/20 transition-all hover:bg-emerald-500/10"
+              >
+                Fridge
+              </button>
+              <button
+                onClick={toggleZityChefConnection}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-extrabold transition-all active:scale-95 ${
+                  user.isZityChefConnected
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'bg-surface-hover border border-border text-text-main hover:bg-border'
+                }`}
+              >
+                {user.isZityChefConnected ? 'Идэвхтэй' : 'Холбох'}
+              </button>
+            </div>
           </div>
         </div>
 

@@ -15,6 +15,7 @@ export function BottomNav({ onOpenOdooModal }: { onOpenOdooModal?: () => void })
   const navItems = [
     { path: '/', label: 'Дэлгүүр', icon: Home },
     { path: '/recipe-kits', label: 'Chef Орц', icon: ChefHat },
+    { path: '/zity-fridge', label: 'Fridge', icon: PackageCheck },
     { path: '/orders', label: 'Захиалга', icon: PackageCheck, badge: activeOrdersCount > 0 ? activeOrdersCount : undefined },
     { path: '/odoo-admin', label: 'Odoo ERP', icon: Database },
     { path: '/profile', label: 'Профайл', icon: User },

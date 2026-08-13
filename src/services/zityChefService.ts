@@ -1,4 +1,4 @@
-import { Product, RecipeBundle, Order } from '../types';
+import { Product, RecipeBundle, Order, FridgeItem } from '../types';
 import { MOCK_PRODUCTS, RECIPE_BUNDLES } from '../constants/mockData';
 
 const BASE_URL = (import.meta as any).env?.VITE_ZITY_CHEF_API_URL || 'http://localhost:3002';
@@ -14,7 +14,49 @@ const IMAGE_MAP: Record<string, string> = {
   'бяслаг': 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=600&q=80',
 };
 
+const DEFAULT_PRODUCT_IMAGE =
+  'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80';
+
+function getCategorySlug(category: string): string {
+  const categoryLower = category.toLowerCase();
+
+  if (categoryLower.includes('мах')) return 'meat';
+  if (categoryLower.includes('ногоо')) return 'vegetables';
+  if (categoryLower.includes('сүү') || categoryLower.includes('өндөг')) return 'dairy';
+  if (categoryLower.includes('гурил') || categoryLower.includes('талх')) return 'bakery';
+  if (categoryLower.includes('жимс')) return 'fruits';
+  if (categoryLower.includes('ундаа') || categoryLower.includes('ус')) return 'drinks';
+  if (categoryLower.includes('амтлагч') || categoryLower.includes('соус')) return 'spices';
+
+  return 'zity-chef';
+}
+
+function getMappedImage(name: string, explicitImage?: string): string {
+  if (explicitImage) return explicitImage;
+
+  const nameLower = name.toLowerCase();
+  const imageKey = Object.keys(IMAGE_MAP).find((key) => nameLower.includes(key));
+  if (imageKey) return IMAGE_MAP[imageKey];
+
+  return (
+    MOCK_PRODUCTS.find((mp) => nameLower.includes(mp.name.toLowerCase()) || mp.name.toLowerCase().includes(nameLower))
+      ?.image || DEFAULT_PRODUCT_IMAGE
+  );
+}
+
+function getNumericValue(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export class ZityChefService {
+  private static readonly fallbackFridgeItems: FridgeItem[] = [
+    { id: 'fridge-1', name: 'Шинэхэн лууван', category: 'Хүнсний ногоо', quantity: 8, unit: 'кг', expiryDays: 9, lastSyncedAt: new Date().toISOString(), source: 'Zity Chef' },
+    { id: 'fridge-2', name: 'Өндөг', category: 'Сүүн бүтээгдэхүүн', quantity: 12, unit: 'ш', expiryDays: 14, lastSyncedAt: new Date().toISOString(), source: 'Zity Chef' },
+    { id: 'fridge-3', name: 'Улаан лооль', category: 'Хүнсний ногоо', quantity: 4, unit: 'кг', expiryDays: 5, lastSyncedAt: new Date().toISOString(), source: 'Zity Chef' },
+    { id: 'fridge-4', name: 'Сүү', category: 'Сүүн бүтээгдэхүүн', quantity: 3, unit: 'л', expiryDays: 7, lastSyncedAt: new Date().toISOString(), source: 'Odoo stock' },
+  ];
+
   /**
    * Fetch products directly from Zity Chef Store backend endpoint
    */
@@ -29,28 +71,26 @@ export class ZityChefService {
 
       if (data.products && Array.isArray(data.products) && data.products.length > 0) {
         const mappedProducts: Product[] = data.products.map((p: any, idx: number) => {
-          const nameLower = (p.name || '').toLowerCase();
-          const mappedImg =
-            p.imageUrl ||
-            Object.keys(IMAGE_MAP).find((key) => nameLower.includes(key))
-              ? IMAGE_MAP[Object.keys(IMAGE_MAP).find((key) => nameLower.includes(key))!]
-              : MOCK_PRODUCTS.find((mp) => mp.name.toLowerCase().includes(nameLower))?.image ||
-                'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80';
+          const name = p.name || p.title || `Zity Chef бараа ${idx + 1}`;
+          const category = p.category || 'Хүнсний ногоо';
+          const price = getNumericValue(p.pricePerUnit ?? p.price, 3000);
 
           return {
             id: p.id || `zity-p-${idx}`,
-            name: p.name,
-            category: p.category || '🥦 Хүнсний ногоо',
-            price: p.pricePerUnit || p.price || 3000,
+            name,
+            category,
+            categorySlug: p.categorySlug || getCategorySlug(category),
+            price,
             unit: p.unit || 'ш',
-            image: mappedImg,
-            stock: 45 + idx * 5,
-            odooId: 101 + idx,
-            sku: `SKU-CHEF-${idx + 1}`,
+            image: getMappedImage(name, p.imageUrl || p.image),
+            stock: getNumericValue(p.stock ?? p.quantity, 45 + idx * 5),
+            odooId: getNumericValue(p.odooId, 101 + idx),
+            sku: p.sku || `SKU-CHEF-${idx + 1}`,
             brand: 'Zity Chef',
             isMongolian: true,
             isOrganic: true,
-            description: `Zity Chef дэлгүүрийн шинэхэн ${p.name}.`,
+            description: p.description || `Zity Chef дэлгүүрийн шинэхэн ${name}.`,
+            tags: ['Zity Chef', 'Live sync'],
           };
         });
 
@@ -79,23 +119,45 @@ export class ZityChefService {
       const data = await response.json();
 
       if (data.recipes && Array.isArray(data.recipes) && data.recipes.length > 0) {
-        const mappedBundles: RecipeBundle[] = data.recipes.map((r: any) => ({
-          id: `kit-${r.id}`,
-          name: `${r.title} — Орц Багц`,
-          description: r.titleEn || 'Zity Chef амттай хоолны шинэхэн орц',
-          chefName: 'Chef Zity',
-          servings: 2,
-          price: 24500,
-          discountPrice: 21900,
-          image: r.image || 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80',
-          productItems: (r.ingredients || []).map((ing: string, i: number) => ({
-            productId: `ing-${i}`,
-            productName: ing,
-            requiredQty: 1,
-            unit: 'порц',
-          })),
-          instructions: r.steps ? r.steps.map((s: any) => `Алхам ${s.stepNumber}: ${s.title} — ${s.description}`) : undefined,
-        }));
+        const mappedBundles: RecipeBundle[] = data.recipes.map((r: any, recipeIndex: number) => {
+          const recipeId = String(r.id || `chef-recipe-${recipeIndex + 1}`);
+          const title = r.title || r.name || `Zity Chef жор ${recipeIndex + 1}`;
+          const ingredients = Array.isArray(r.ingredients) ? r.ingredients : [];
+
+          return {
+            id: `kit-${recipeId}`,
+            recipeId,
+            name: `${title} - Орц Багц`,
+            description: r.titleEn || r.description || 'Zity Chef амттай хоолны шинэхэн орц',
+            chefName: r.chefName || 'Chef Zity',
+            prepTime: r.prepTime || r.cookTime || '25 мин',
+            servings: getNumericValue(r.servings, 2),
+            price: getNumericValue(r.price ?? r.totalPrice, 24500),
+            discountPrice: getNumericValue(r.discountPrice ?? r.salePrice, 21900),
+            image:
+              r.image ||
+              r.imageUrl ||
+              'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80',
+            productItems: ingredients.map((ing: any, i: number) => {
+              const ingredientName = typeof ing === 'string' ? ing : ing.name || ing.productName || `Орц ${i + 1}`;
+
+              return {
+                productId: String((typeof ing === 'object' && (ing.productId || ing.id)) || `${recipeId}-ing-${i + 1}`),
+                productName: ingredientName,
+                requiredQty: getNumericValue(typeof ing === 'object' ? ing.requiredQty ?? ing.quantity : 1, 1),
+                unit: (typeof ing === 'object' && ing.unit) || 'порц',
+                pricePerUnit: getNumericValue(typeof ing === 'object' ? ing.pricePerUnit ?? ing.price : undefined, 3500),
+              };
+            }),
+            instructions: r.steps
+              ? r.steps.map((s: any, i: number) =>
+                  typeof s === 'string'
+                    ? s
+                    : `Алхам ${s.stepNumber || i + 1}: ${s.title || ''}${s.description ? ` - ${s.description}` : ''}`
+                )
+              : undefined,
+          };
+        });
 
         // Merge with existing bundles if any
         const combined = [...mappedBundles];
@@ -111,6 +173,35 @@ export class ZityChefService {
       console.warn('[ZityChefService] Recipe API unavailable, using local recipes:', err);
     }
     return { bundles: RECIPE_BUNDLES, isLive: false };
+  }
+
+  static async fetchFridgeItems(): Promise<{ items: FridgeItem[]; isLive: boolean }> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/inventory`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+
+      const items = Array.isArray(data.inventory)
+        ? data.inventory.map((item: any, idx: number) => ({
+            id: item.id || `fridge-${idx + 1}`,
+            name: item.name || 'Орц',
+            category: item.category || 'Хүнсний ногоо',
+            quantity: Number(item.quantity || 1),
+            unit: item.unit || 'ш',
+            expiryDays: Number(item.expiryDays || 7),
+            lastSyncedAt: item.lastUpdated || new Date().toISOString(),
+            source: item.source || 'Zity Chef',
+          }))
+        : [];
+
+      if (items.length > 0) {
+        return { items, isLive: true };
+      }
+    } catch (err) {
+      console.warn('[ZityChefService] Inventory API unavailable, using local fridge data:', err);
+    }
+
+    return { items: this.fallbackFridgeItems, isLive: false };
   }
 
   /**
@@ -150,8 +241,10 @@ export class ZityChefService {
           },
           body: JSON.stringify({
             name: item.name,
-            emoji: '🥩',
-            category: '🥦 Ногоо',
+            sku: item.sku,
+            imageUrl: item.image,
+            emoji: item.categorySlug === 'meat' ? '🥩' : '🥬',
+            category: item.category,
             quantity: item.quantity,
             unit: item.unit,
             expiryDays: 7,

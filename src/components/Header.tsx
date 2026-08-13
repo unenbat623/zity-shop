@@ -22,6 +22,7 @@ export function Header({ onOpenOdooModal }: { onOpenOdooModal?: () => void }) {
   const navLinks = [
     { label: 'Дэлгүүр', path: '/', icon: UtensilsCrossed },
     { label: 'Хоолны Багцууд', path: '/recipe-kits', icon: ChefHat },
+    { label: 'Fridge', path: '/zity-fridge', icon: PackageCheck },
     { label: 'Захиалгууд', path: '/orders', icon: PackageCheck },
     { label: 'Odoo ERP', path: '/odoo-admin', icon: Database },
     { label: 'Профайл', path: '/profile', icon: User },
