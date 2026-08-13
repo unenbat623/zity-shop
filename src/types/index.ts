@@ -36,6 +36,17 @@ export interface RecipeIngredientItem {
   pricePerUnit: number;
 }
 
+export interface FridgeItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  expiryDays: number;
+  lastSyncedAt: string;
+  source: 'Zity Chef' | 'Odoo stock';
+}
+
 export interface RecipeBundle {
   id: string;
   recipeId: string;

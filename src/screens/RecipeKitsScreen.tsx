@@ -1,16 +1,30 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { BottomNav } from '../components/BottomNav';
 import { RECIPE_BUNDLES } from '../constants/mockData';
 import { RecipeBundle } from '../types';
 import { useCartStore } from '../store/useCartStore';
-import { ChefHat, Users, CheckCircle2, ShoppingBag, Layers } from 'lucide-react';
+import { ZityChefService } from '../services/zityChefService';
+import { ChefHat, Users, CheckCircle2, ShoppingBag, Layers, RefreshCw, Wifi } from 'lucide-react';
 
 export function RecipeKitsScreen() {
-  const navigate = useNavigate();
   const { addBundle } = useCartStore();
   const [addedBundleId, setAddedBundleId] = useState<string | null>(null);
+  const [recipeKits, setRecipeKits] = useState<RecipeBundle[]>(RECIPE_BUNDLES);
+  const [isLive, setIsLive] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadRecipeKits = async () => {
+    setIsLoading(true);
+    const result = await ZityChefService.fetchRecipeKits();
+    setRecipeKits(result.bundles);
+    setIsLive(result.isLive);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    void loadRecipeKits();
+  }, []);
 
   const handleAddBundle = (bundle: RecipeBundle) => {
     addBundle(bundle);
@@ -29,16 +43,30 @@ export function RecipeKitsScreen() {
             <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
               <ChefHat className="h-4 w-4 text-emerald-400" /> Zity Chef Жор & Орц Багцууд
             </span>
+            {isLive && (
+              <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-200 border border-emerald-400/30 flex items-center gap-1.5">
+                <Wifi className="h-4 w-4 text-emerald-300 animate-pulse" /> Live
+              </span>
+            )}
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white mb-2">Хоолны Орцоо Бэлэн Багцаар Ав</h1>
-          <p className="text-xs sm:text-sm text-emerald-100/80 leading-relaxed max-w-xl">
-            Гэртээ амттай хоол хийхэд хэрэгтэй бүх шинэхэн орцыг яг таг тунгаар нь бэлтгэж нэг дор хүргэж өгнө.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <p className="text-xs sm:text-sm text-emerald-100/80 leading-relaxed max-w-xl">
+              Гэртээ амттай хоол хийхэд хэрэгтэй бүх шинэхэн орцыг яг таг тунгаар нь бэлтгэж нэг дор хүргэж өгнө.
+            </p>
+            <button
+              onClick={() => void loadRecipeKits()}
+              className="inline-flex w-fit items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 text-xs font-extrabold text-white border border-white/10 hover:bg-white/15"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Синк
+            </button>
+          </div>
         </div>
 
         {/* Recipe Bundles Responsive Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {RECIPE_BUNDLES.map((bundle) => {
+          {recipeKits.map((bundle) => {
             const isJustAdded = addedBundleId === bundle.id;
 
             return (
