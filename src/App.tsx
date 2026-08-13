@@ -13,11 +13,14 @@ import { RecipeKitsScreen } from './screens/RecipeKitsScreen';
 import { FridgeScreen } from './screens/FridgeScreen';
 import { OdooAdminScreen } from './screens/OdooAdminScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { LoginScreen } from './screens/LoginScreen';
 import { useThemeStore } from './store/useThemeStore';
+import { useAuthStore } from './store/useAuthStore';
 import { useEffect } from 'react';
 
 export default function App() {
   const { isDark } = useThemeStore();
+  const { hydrateAuthFromUrl } = useAuthStore();
 
   useEffect(() => {
     if (isDark) {
@@ -26,6 +29,10 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDark]);
+
+  useEffect(() => {
+    void hydrateAuthFromUrl();
+  }, [hydrateAuthFromUrl]);
 
   return (
     <BrowserRouter>
@@ -38,6 +45,7 @@ export default function App() {
         <Route path="/recipe-kits" element={<RecipeKitsScreen />} />
         <Route path="/zity-fridge" element={<FridgeScreen />} />
         <Route path="/odoo-admin" element={<OdooAdminScreen />} />
+        <Route path="/login" element={<LoginScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
       </Routes>
     </BrowserRouter>

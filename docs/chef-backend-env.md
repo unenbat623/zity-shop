@@ -23,7 +23,16 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your_supabase_publishable_anon_key
 ```
 
-Гэхдээ одоогийн Delguur integration нь Chef backend API-аар дамжиж байгаа тул Supabase key-г frontend-д нэмэх шаардлагагүй.
+Google бүртгэл/нэвтрэлт ажиллуулах бол Supabase dashboard дээр дараах redirect URL-уудыг нэмнэ:
+
+- Local: `http://localhost:3000/login`
+- Production: `https://your-delguur-domain.example.com/login`
+
+Supabase Google provider дээр Google Console callback нь Supabase-ийн өөрийн callback байна:
+
+```text
+https://your-project.supabase.co/auth/v1/callback
+```
 
 ## Backend-only secret-үүд
 

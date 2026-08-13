@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, ShoppingCart, MapPin, Moon, Sun, ChefHat, Database, ChevronDown, UtensilsCrossed, PackageCheck, User } from 'lucide-react';
+import { Search, ShoppingCart, MapPin, Moon, Sun, ChefHat, Database, ChevronDown, UtensilsCrossed, PackageCheck, User, LogIn } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useSearchStore } from '../store/useSearchStore';
@@ -12,7 +12,7 @@ export function Header({ onOpenOdooModal }: { onOpenOdooModal?: () => void }) {
   const { isDark, toggleTheme } = useThemeStore();
   const { searchQuery, setSearchQuery } = useSearchStore();
   const { config } = useOdooStore();
-  const { user, selectedAddressIndex } = useAuthStore();
+  const { user, selectedAddressIndex, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const totalItems = getTotalItems();
@@ -92,6 +92,15 @@ export function Header({ onOpenOdooModal }: { onOpenOdooModal?: () => void }) {
               className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-text-main transition-colors hover:bg-border border border-border shrink-0"
             >
               {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-700" />}
+            </button>
+
+            {/* Cart Icon */}
+            <button
+              onClick={() => navigate(isAuthenticated ? '/profile' : '/login')}
+              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-text-main transition-colors hover:bg-border border border-border shrink-0"
+              title={isAuthenticated ? 'Профайл' : 'Google нэвтрэлт'}
+            >
+              {isAuthenticated ? <User className="h-4 w-4" /> : <LogIn className="h-4 w-4 text-emerald-600" />}
             </button>
 
             {/* Cart Icon */}

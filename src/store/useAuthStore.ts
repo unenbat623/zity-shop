@@ -1,9 +1,16 @@
 import { create } from 'zustand';
 import { UserProfile, DeliveryAddress } from '../types';
+import { SupabaseAuthService } from '../services/supabaseAuthService';
 
 interface AuthState {
   user: UserProfile;
+  isAuthenticated: boolean;
+  isAuthLoading: boolean;
+  authError: string | null;
   selectedAddressIndex: number;
+  hydrateAuthFromUrl: () => Promise<void>;
+  signInWithGoogle: () => void;
+  signOut: () => Promise<void>;
   addAddress: (address: DeliveryAddress) => void;
   setSelectedAddressIndex: (index: number) => void;
   toggleZityChefConnection: () => void;
@@ -36,7 +43,44 @@ export const useAuthStore = create<AuthState>((set) => ({
       },
     ],
   },
+  isAuthenticated: false,
+  isAuthLoading: false,
+  authError: null,
   selectedAddressIndex: 0,
+
+  hydrateAuthFromUrl: async () => {
+    set({ isAuthLoading: true, authError: null });
+    try {
+      const user = await SupabaseAuthService.hydrateFromRedirect();
+      set((state) => ({
+        user: user || state.user,
+        isAuthenticated: Boolean(user),
+        isAuthLoading: false,
+      }));
+    } catch (err) {
+      set({
+        authError: err instanceof Error ? err.message : 'Google нэвтрэлт амжилтгүй боллоо.',
+        isAuthLoading: false,
+      });
+    }
+  },
+
+  signInWithGoogle: () => {
+    try {
+      SupabaseAuthService.signInWithGoogle();
+    } catch (err) {
+      set({ authError: err instanceof Error ? err.message : 'Google нэвтрэлт эхлүүлэхэд алдаа гарлаа.' });
+    }
+  },
+
+  signOut: async () => {
+    await SupabaseAuthService.signOut();
+    set({
+      isAuthenticated: false,
+      authError: null,
+      selectedAddressIndex: 0,
+    });
+  },
 
   addAddress: (address) =>
     set((state) => ({

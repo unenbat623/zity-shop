@@ -21,11 +21,13 @@ import {
   Edit3,
   Trophy,
   ShoppingBag,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 
 export function ProfileScreen() {
   const navigate = useNavigate();
-  const { user, selectedAddressIndex, setSelectedAddressIndex, toggleZityChefConnection } = useAuthStore();
+  const { user, selectedAddressIndex, setSelectedAddressIndex, toggleZityChefConnection, isAuthenticated, signOut } = useAuthStore();
   const { orders } = useOrderStore();
   const { config } = useOdooStore();
 
@@ -55,6 +57,24 @@ export function ProfileScreen() {
                 <Phone className="h-3 w-3" /> {user.phone}
               </div>
             </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {isAuthenticated ? (
+              <button
+                onClick={() => void signOut()}
+                className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2 text-xs font-extrabold text-white border border-white/20 hover:bg-white/15"
+              >
+                <LogOut className="h-4 w-4" /> Гарах
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/login')}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-2 text-xs font-extrabold text-slate-950 hover:bg-emerald-400"
+              >
+                <LogIn className="h-4 w-4" /> Google-р нэвтрэх
+              </button>
+            )}
           </div>
 
           {/* Zity Points Badge */}
