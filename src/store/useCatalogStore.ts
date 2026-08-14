@@ -37,6 +37,11 @@ interface CatalogState {
   loadStorefront: (options?: { force?: boolean }) => Promise<void>;
   refreshAll: () => Promise<void>;
   getProductById: (id: string) => Product | undefined;
+
+  /** Хөргөгчийн орцын тоог өөрчилнө (Chef DB руу бичнэ) */
+  updateFridgeQuantity: (id: string, quantity: number) => Promise<{ ok: boolean; message: string }>;
+  /** Хөргөгчөөс орц устгана */
+  removeFridgeItem: (id: string) => Promise<{ ok: boolean; message: string }>;
 }
 
 function isFresh(fetchedAt: number | null, force: boolean | undefined): boolean {
@@ -146,4 +151,44 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   getProductById: (id) => get().products.find((product) => product.id === id),
+
+  /**
+   * Тоог өөрчилнө. UI шууд шинэчлэгдэж (optimistic), сервер алдаа өгвөл
+   * хуучин утга руу буцаана — хэрэглэгч буруу тоо харах эрсдэлгүй.
+   */
+  updateFridgeQuantity: async (id, quantity) => {
+    const previous = get().fridgeItems;
+    const target = previous.find((item) => item.id === id);
+    if (!target) return { ok: false, message: 'Орц олдсонгүй.' };
+
+    if (quantity <= 0) return get().removeFridgeItem(id);
+
+    set({
+      fridgeItems: previous.map((item) => (item.id === id ? { ...item, quantity } : item)),
+    });
+
+    const result = await ZityChefService.updateFridgeItem(id, { quantity });
+    if (!result.success) {
+      set({ fridgeItems: previous });
+      return { ok: false, message: result.message };
+    }
+
+    return { ok: true, message: result.message };
+  },
+
+  removeFridgeItem: async (id) => {
+    const previous = get().fridgeItems;
+    const target = previous.find((item) => item.id === id);
+    if (!target) return { ok: false, message: 'Орц олдсонгүй.' };
+
+    set({ fridgeItems: previous.filter((item) => item.id !== id) });
+
+    const result = await ZityChefService.removeFridgeItem(id);
+    if (!result.success) {
+      set({ fridgeItems: previous });
+      return { ok: false, message: result.message };
+    }
+
+    return { ok: true, message: `"${target.name}" хөргөгчөөс хасагдлаа.` };
+  },
 }));

@@ -99,6 +99,10 @@ export interface IntegrationSyncState {
 export interface Order {
   id: string;
   odooOrderRef: string;
+  /** Zity Chef дээрх захиалгын дугаар (ZITY-xxxxxx). Давхардлыг таних түлхүүр. */
+  chefOrderRef?: string;
+  /** Chef DB-ээс уншсан захиалга эсэх — эдгээрийг локалаас цуцлах боломжгүй */
+  isRemote?: boolean;
   createdAt: string;
   userId: string | null;
   items: CartItem[];

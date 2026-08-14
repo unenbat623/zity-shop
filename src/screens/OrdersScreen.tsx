@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -8,12 +8,14 @@ import {
   Database,
   Package,
   PackageCheck,
+  RefreshCw,
   ShoppingBag,
   Truck,
   XCircle,
 } from 'lucide-react';
 
 import { AppShell } from '../components/AppShell';
+import { useToastStore } from '../store/useToastStore';
 import { useOrderStore } from '../store/useOrderStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { Order, OrderStatus } from '../types';
@@ -161,7 +163,14 @@ function OrderCard({ order, onClick }: { order: Order; onClick: () => void }) {
           </div>
         </div>
 
-        {hasSyncIssue && (
+        {order.isRemote && (
+          <p className="mb-2 flex items-center gap-1.5 rounded-xl border border-border bg-surface-hover px-2.5 py-1.5 text-[10px] font-bold text-text-muted">
+            <ChefHat className="h-3 w-3 shrink-0 text-emerald-500" />
+            Zity Chef дээр үүссэн захиалга
+          </p>
+        )}
+
+        {hasSyncIssue && !order.isRemote && (
           <p className="mb-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-[10px] font-bold text-amber-600">
             Синк амжилтгүй — дэлгэрэнгүйгээс дахин илгээнэ үү.
           </p>
@@ -185,8 +194,23 @@ function OrderCard({ order, onClick }: { order: Order; onClick: () => void }) {
 
 export function OrdersScreen() {
   const navigate = useNavigate();
+  const showToast = useToastStore((state) => state.show);
+
   const account = useAuthStore((state) => state.account);
   const orders = useOrderStore((state) => state.orders);
+  const isSyncingFromChef = useOrderStore((state) => state.isSyncingFromChef);
+  const syncFromChef = useOrderStore((state) => state.syncFromChef);
+
+  // Chef DB дээрх захиалгуудыг татаж нэгтгэнэ — өөр төхөөрөмж эсвэл Chef аппаас
+  // хийсэн захиалга ч энд харагдана
+  useEffect(() => {
+    void syncFromChef();
+  }, [syncFromChef]);
+
+  const handleRefresh = async () => {
+    await syncFromChef({ force: true });
+    showToast('Захиалгын жагсаалт шинэчлэгдлээ.', 'success');
+  };
 
   const myOrders = orders.filter((order) => order.userId === (account?.id ?? null));
   const activeOrders = myOrders.filter(
@@ -198,11 +222,21 @@ export function OrdersScreen() {
 
   return (
     <AppShell showSearch={false} title="Захиалгууд" maxWidth="md">
-        <div className="mb-4">
-          <h1 className="flex items-center gap-2 text-xl font-extrabold text-text-main">
-            <Package className="h-5 w-5 text-emerald-500" /> Захиалгууд
-          </h1>
-          <p className="text-xs text-text-muted">Захиалгын явц болон синкийн төлөв</p>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="flex items-center gap-2 text-xl font-extrabold text-text-main">
+              <Package className="h-5 w-5 text-emerald-500" /> Захиалгууд
+            </h1>
+            <p className="text-xs text-text-muted">Zity Chef болон Delguur-ийн захиалга нэг дор</p>
+          </div>
+          <button
+            onClick={() => void handleRefresh()}
+            disabled={isSyncingFromChef}
+            className="zity-btn-secondary shrink-0 px-3 py-2 text-[11px]"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isSyncingFromChef ? 'animate-spin' : ''}`} />
+            Шинэчлэх
+          </button>
         </div>
 
         {activeOrders.length > 0 && (

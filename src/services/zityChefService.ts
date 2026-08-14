@@ -15,7 +15,16 @@
  */
 
 import { ApiError, chefRequest } from './apiClient';
-import { AdminUserRow, FridgeItem, Order, Product, RecipeBundle } from '../types';
+import {
+  AdminUserRow,
+  CartItem,
+  FridgeItem,
+  Order,
+  OrderStatus,
+  PaymentMethod,
+  Product,
+  RecipeBundle,
+} from '../types';
 import { MOCK_PRODUCTS, RECIPE_BUNDLES } from '../constants/mockData';
 
 const DEFAULT_PRODUCT_IMAGE =
@@ -38,6 +47,32 @@ type ChefCategory = (typeof CHEF_CATEGORIES)[number];
 /** Chef-ийн `inventory_items.unit` CHECK constraint дээрх зөвшөөрөгдсөн утгууд */
 const CHEF_UNITS = ['гр', 'л', 'ш', 'g', 'l', 'pcs'] as const;
 type ChefUnit = (typeof CHEF_UNITS)[number];
+
+/**
+ * Chef-ийн `orders.payment_method` CHECK constraint нь зөвхөн эдгээрийг зөвшөөрнө.
+ * Delguur дээр `monpay`, `cod` бас байдаг тул хамгийн ойрыг нь сонгож илгээнэ —
+ * эс бөгөөс insert 502 өгч, захиалга Chef дээр огт бүртгэгдэхгүй.
+ * (Delguur өөрийн бичлэг дээрээ жинхэнэ утгыг хэвээр хадгална.)
+ */
+const CHEF_PAYMENT_METHODS = ['qpay', 'socialpay', 'card'] as const;
+type ChefPaymentMethod = (typeof CHEF_PAYMENT_METHODS)[number];
+
+export function toChefPaymentMethod(method: PaymentMethod): ChefPaymentMethod {
+  if (CHEF_PAYMENT_METHODS.includes(method as ChefPaymentMethod)) {
+    return method as ChefPaymentMethod;
+  }
+  // MonPay нь QR түрийвч тул qpay-д хамгийн ойр; бэлэн мөнгө Chef-д байхгүй
+  return method === 'monpay' ? 'qpay' : 'card';
+}
+
+/** Chef-ийн захиалгын төлвийг Delguur-ийн төлөв рүү буулгана */
+const CHEF_STATUS_MAP: Record<string, OrderStatus> = {
+  pending: 'pending',
+  paid: 'odoo_synced',
+  delivering: 'shipping',
+  completed: 'delivered',
+  cancelled: 'cancelled',
+};
 
 export interface SyncResult<T> {
   data: T;
@@ -63,7 +98,7 @@ function describeError(error: unknown): string {
 }
 
 /** Chef-ийн ангиллын нэрийг Delguur-ийн ангиллын slug руу буулгана */
-function toCategorySlug(category: string): string {
+export function toCategorySlug(category: string): string {
   const value = category.toLowerCase();
 
   if (value.includes('мах')) return 'meat';
@@ -82,7 +117,7 @@ function toCategorySlug(category: string): string {
  * Delguur-ийн ангиллыг Chef-ийн CHECK constraint-д тохирох утга болгоно.
  * Таарахгүй утга илгээвэл Supabase insert 502 өгнө.
  */
-function toChefCategory(category: string, slug: string): ChefCategory {
+export function toChefCategory(category: string, slug: string): ChefCategory {
   if (CHEF_CATEGORIES.includes(category as ChefCategory)) return category as ChefCategory;
 
   switch (slug) {
@@ -103,7 +138,7 @@ function toChefCategory(category: string, slug: string): ChefCategory {
  * Delguur-ийн нэгжийг Chef-ийн зөвшөөрсөн нэгж рүү хөрвүүлнэ.
  * `кг` → `гр` (×1000), `мл` → `л`, бусад → `ш`.
  */
-function toChefUnit(unit: string, quantity: number): { unit: ChefUnit; quantity: number } {
+export function toChefUnit(unit: string, quantity: number): { unit: ChefUnit; quantity: number } {
   const value = unit.trim().toLowerCase();
 
   if (CHEF_UNITS.includes(value as ChefUnit)) {
@@ -164,6 +199,16 @@ interface ChefInventoryPayload {
   unit?: string;
   expiryDays?: number;
   pricePerUnit?: number;
+}
+
+interface ChefOrderPayload {
+  id?: string;
+  items?: unknown[];
+  totalAmount?: number;
+  address?: string;
+  status?: string;
+  paymentMethod?: string;
+  createdAt?: string;
 }
 
 interface ChefDashboardPayload {
@@ -334,6 +379,78 @@ function mapRecipeBundle(
   };
 }
 
+/**
+ * Chef DB-ийн захиалгыг Delguur-ийн бүтэц рүү хөрвүүлнэ.
+ *
+ * Chef нь захиалгын дэлгэрэнгүйг Delguur шиг бүрэн хадгалдаггүй (хаяг нь нэг мөр
+ * текст, бараа нь зөвхөн id/нэр/тоо/үнэ). Тиймээс байгаа мэдээллийг нь ашиглаж,
+ * дутууг каталогоос нөхнө. Эдгээр захиалгыг `isRemote` гэж тэмдэглэнэ.
+ */
+function mapChefOrder(payload: ChefOrderPayload, catalog: Product[]): Order {
+  const chefRef = toText(payload.id, 'ZITY');
+  const rawItems = Array.isArray(payload.items) ? payload.items : [];
+
+  const items: CartItem[] = rawItems.map((raw, index) => {
+    const item = (raw ?? {}) as Record<string, unknown>;
+    const id = toText(item.id, `chef-item-${index}`);
+    const matched = catalog.find((product) => product.id === id);
+    const name = toText(item.name, matched?.name ?? `Бараа ${index + 1}`);
+
+    return {
+      id,
+      sku: matched?.sku ?? '—',
+      name,
+      price: toNumber(item.price, matched?.price ?? 0),
+      image: matched?.image ?? DEFAULT_PRODUCT_IMAGE,
+      category: matched?.category ?? 'Zity Chef',
+      categorySlug: matched?.categorySlug ?? 'zity-chef',
+      description: matched?.description ?? '',
+      stock: matched?.stock ?? 0,
+      unit: matched?.unit ?? 'ш',
+      quantity: Math.max(1, Math.floor(toNumber(item.quantity, 1))),
+    };
+  });
+
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const totalAmount = toNumber(payload.totalAmount, subtotal);
+
+  // Chef нь огноог `toLocaleDateString('mn-MN')` («2026.08.14») хэлбэрээр буцаадаг
+  const parsedDate = new Date(toText(payload.createdAt, ''));
+  const createdAt = Number.isNaN(parsedDate.getTime())
+    ? new Date().toISOString()
+    : parsedDate.toISOString();
+
+  const status = CHEF_STATUS_MAP[toText(payload.status, 'paid')] ?? 'odoo_synced';
+
+  return {
+    id: chefRef,
+    chefOrderRef: chefRef,
+    isRemote: true,
+    odooOrderRef: '—',
+    createdAt,
+    userId: null,
+    items,
+    deliveryMode: 'delivery',
+    address: {
+      id: `chef-addr-${chefRef}`,
+      district: toText(payload.address, 'Хаяг тэмдэглэгдээгүй'),
+      khoroo: '',
+      streetBuilding: '',
+      entranceAppt: '',
+      phone: '',
+    },
+    paymentMethod: (toText(payload.paymentMethod, 'qpay') as PaymentMethod) ?? 'qpay',
+    paymentStatus: status === 'pending' ? 'unpaid' : 'paid',
+    subtotal,
+    discountAmount: Math.max(0, subtotal - totalAmount),
+    deliveryFee: 0,
+    totalAmount,
+    status,
+    odooSync: { status: 'pending', message: 'Zity Chef дээр үүссэн захиалга.' },
+    chefSync: { status: 'success', message: 'Zity Chef дээр бүртгэлтэй.' },
+  };
+}
+
 function mapFridgeItem(payload: ChefInventoryPayload, index: number): FridgeItem {
   return {
     id: toText(payload.id, `fridge-${index + 1}`),
@@ -469,14 +586,50 @@ export const ZityChefService = {
   },
 
   /**
+   * Хэрэглэгчийн захиалгуудыг Chef DB-ээс уншина.
+   *
+   * Chef болон Delguur нэг Supabase төсөл хуваалцдаг тул хоёр аппын аль нэгээс
+   * хийсэн захиалга хоёуланд нь харагдана. Локал хуулбар байхгүй ч (өөр
+   * төхөөрөмжөөс нэвтэрсэн) захиалгын түүх алдагдахгүй.
+   *
+   * @param catalog Барааны нэр/зураг сэргээхэд ашиглана — Chef зөвхөн
+   *                `{ id, name, quantity, price }` хадгалдаг.
+   */
+  async fetchOrders(catalog: Product[], signal?: AbortSignal): Promise<SyncResult<Order[]>> {
+    try {
+      const response = await chefRequest<{ orders?: ChefOrderPayload[] }>('/orders', {
+        signal,
+        requireAuth: true,
+        timeoutMs: 10_000,
+      });
+      const payload = Array.isArray(response?.orders) ? response.orders : [];
+
+      return {
+        data: payload.map((order) => mapChefOrder(order, catalog)),
+        isLive: true,
+        error: null,
+      };
+    } catch (error) {
+      return { data: [], isLive: false, error: describeError(error) };
+    }
+  },
+
+  /**
    * Захиалгыг Zity Chef рүү илгээж, худалдаж авсан орцыг хөргөгчид нэмнэ.
    *
    * Хоёулаа нэвтрэлт шаарддаг. Захиалга үүсэх нь Chef backend-ээс хамаарахгүй —
    * амжилтгүй болбол зөвхөн синкийн төлөв "failed" болно.
+   *
+   * @returns `chefOrderRef` — Chef дээр үүссэн дугаар. Дараа нь захиалгуудыг
+   *          нэгтгэхэд давхардлыг таних түлхүүр болно.
    */
-  async syncOrder(order: Order): Promise<{ success: boolean; message: string }> {
+  async syncOrder(
+    order: Order
+  ): Promise<{ success: boolean; message: string; chefOrderRef?: string }> {
+    let chefOrderRef: string | undefined;
+
     try {
-      await chefRequest('/orders', {
+      const response = await chefRequest<{ order?: { id?: string } }>('/orders', {
         method: 'POST',
         requireAuth: true,
         timeoutMs: 12_000,
@@ -496,9 +649,11 @@ export const ZityChefService = {
           ]
             .filter(Boolean)
             .join(', '),
-          paymentMethod: order.paymentMethod,
+          paymentMethod: toChefPaymentMethod(order.paymentMethod),
         },
       });
+
+      chefOrderRef = response?.order?.id;
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         return { success: false, message: 'Zity Chef рүү илгээхийн тулд нэвтэрсэн байх шаардлагатай.' };
@@ -534,13 +689,45 @@ export const ZityChefService = {
     if (failedCount === 0) {
       return {
         success: true,
+        chefOrderRef,
         message: `Захиалга илгээгдэж, ${order.items.length} орц Zity Chef хөргөгчид нэмэгдлээ.`,
       };
     }
 
     return {
       success: true,
+      chefOrderRef,
       message: `Захиалга илгээгдлээ. ${failedCount}/${order.items.length} орц хөргөгчид нэмэгдсэнгүй.`,
     };
+  },
+
+  /** Хөргөгчийн орцын тоо ширхгийг өөрчилнө */
+  async updateFridgeItem(
+    id: string,
+    updates: { quantity?: number; expiryDays?: number }
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      await chefRequest(`/inventory/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        requireAuth: true,
+        body: updates,
+      });
+      return { success: true, message: 'Хөргөгчийн бүртгэл шинэчлэгдлээ.' };
+    } catch (error) {
+      return { success: false, message: describeError(error) };
+    }
+  },
+
+  /** Хөргөгчөөс орц устгана */
+  async removeFridgeItem(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await chefRequest(`/inventory/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        requireAuth: true,
+      });
+      return { success: true, message: 'Орц хөргөгчөөс хасагдлаа.' };
+    } catch (error) {
+      return { success: false, message: describeError(error) };
+    }
   },
 };

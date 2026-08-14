@@ -3,20 +3,46 @@
  * Odoo ERP + Zity Chef + Supabase Auth интеграцтай
  */
 
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 
+// Нүүр хуудсыг шууд оруулна — хэрэглэгчийн эхний харах зүйл
 import { HomeScreen } from './screens/HomeScreen';
-import { CartScreen } from './screens/CartScreen';
-import { CheckoutScreen } from './screens/CheckoutScreen';
-import { OrdersScreen } from './screens/OrdersScreen';
-import { OrderDetailScreen } from './screens/OrderDetailScreen';
-import { RecipeKitsScreen } from './screens/RecipeKitsScreen';
-import { FridgeScreen } from './screens/FridgeScreen';
-import { OdooAdminScreen } from './screens/OdooAdminScreen';
-import { ProfileScreen } from './screens/ProfileScreen';
-import { LoginScreen } from './screens/LoginScreen';
-import { NotFoundScreen } from './screens/NotFoundScreen';
+
+/**
+ * Бусад хуудсыг хэрэгцээтэй үед нь татна.
+ *
+ * Ингэснээр эхний ачаалалтад admin dashboard, checkout зэрэг хүнд хуудсууд
+ * орохгүй — bundle нэг том хэсэг байхын оронд route бүрээр хуваагдана.
+ */
+const CartScreen = lazy(() => import('./screens/CartScreen').then((m) => ({ default: m.CartScreen })));
+const CheckoutScreen = lazy(() =>
+  import('./screens/CheckoutScreen').then((m) => ({ default: m.CheckoutScreen }))
+);
+const OrdersScreen = lazy(() =>
+  import('./screens/OrdersScreen').then((m) => ({ default: m.OrdersScreen }))
+);
+const OrderDetailScreen = lazy(() =>
+  import('./screens/OrderDetailScreen').then((m) => ({ default: m.OrderDetailScreen }))
+);
+const RecipeKitsScreen = lazy(() =>
+  import('./screens/RecipeKitsScreen').then((m) => ({ default: m.RecipeKitsScreen }))
+);
+const FridgeScreen = lazy(() =>
+  import('./screens/FridgeScreen').then((m) => ({ default: m.FridgeScreen }))
+);
+const OdooAdminScreen = lazy(() =>
+  import('./screens/OdooAdminScreen').then((m) => ({ default: m.OdooAdminScreen }))
+);
+const ProfileScreen = lazy(() =>
+  import('./screens/ProfileScreen').then((m) => ({ default: m.ProfileScreen }))
+);
+const LoginScreen = lazy(() =>
+  import('./screens/LoginScreen').then((m) => ({ default: m.LoginScreen }))
+);
+const NotFoundScreen = lazy(() =>
+  import('./screens/NotFoundScreen').then((m) => ({ default: m.NotFoundScreen }))
+);
 
 import { RequireAuth } from './components/RequireAuth';
 import { ToastHost } from './components/ui/ToastHost';
@@ -35,6 +61,15 @@ function ScrollToTop() {
   }, [pathname]);
 
   return null;
+}
+
+/** Хуудас татагдаж байх үеийн зөөлөн байдал */
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+    </div>
+  );
 }
 
 export default function App() {
@@ -64,6 +99,7 @@ export default function App() {
     <BrowserRouter>
       <ScrollToTop />
 
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         {/* Нээлттэй хуудсууд */}
         <Route path="/" element={<HomeScreen />} />
@@ -125,6 +161,7 @@ export default function App() {
 
         <Route path="*" element={<NotFoundScreen />} />
       </Routes>
+      </Suspense>
 
       <ToastHost />
     </BrowserRouter>

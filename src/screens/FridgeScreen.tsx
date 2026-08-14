@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -6,7 +6,10 @@ import {
   ChefHat,
   Clock3,
   Database,
+  Minus,
   PackageOpen,
+  Plus,
+  Trash2,
   RefreshCw,
   Wifi,
   WifiOff,
@@ -134,6 +137,28 @@ export function FridgeScreen() {
 
 function FridgeCard({ item }: { item: FridgeItem }) {
   const expiry = expiryTone(item.expiryDays);
+  const showToast = useToastStore((state) => state.show);
+  const { updateFridgeQuantity, removeFridgeItem } = useCatalogStore();
+  const [isBusy, setIsBusy] = useState(false);
+
+  const changeQuantity = async (delta: number) => {
+    if (isBusy) return;
+    setIsBusy(true);
+    const result = await updateFridgeQuantity(item.id, Math.round((item.quantity + delta) * 100) / 100);
+    setIsBusy(false);
+    if (!result.ok) showToast(result.message, 'warning');
+  };
+
+  const handleRemove = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    const result = await removeFridgeItem(item.id);
+    setIsBusy(false);
+    showToast(result.message, result.ok ? 'info' : 'warning');
+  };
+
+  /** 1 ширхэг/литрээс жижиг нэгжийг илүү нарийн алхамаар өөрчилнө */
+  const step = item.unit === 'гр' || item.unit === 'g' ? 100 : 1;
 
   return (
     <article className="zity-card p-4 transition-all hover:border-emerald-500/30">
@@ -147,16 +172,47 @@ function FridgeCard({ item }: { item: FridgeItem }) {
             <p className="truncate text-[10px] font-bold text-emerald-600">{item.category}</p>
           </div>
         </div>
-        {item.expiryDays <= EXPIRY_WARNING_DAYS && (
-          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />
-        )}
+
+        <div className="flex shrink-0 items-center gap-1">
+          {item.expiryDays <= EXPIRY_WARNING_DAYS && (
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+          )}
+          <button
+            onClick={() => void handleRemove()}
+            disabled={isBusy}
+            className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-red-500 disabled:opacity-40"
+            aria-label={`${item.name} хөргөгчөөс хасах`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         <div className="rounded-2xl border border-border bg-surface-hover p-2.5">
           <div className="text-[9px] font-bold uppercase tracking-wide text-text-muted">Нөөц</div>
-          <div className="mt-1 text-sm font-extrabold text-text-main">
-            {item.quantity} {item.unit}
+          <div className="mt-1 flex items-center justify-between gap-1">
+            <span className="text-sm font-extrabold text-text-main">
+              {item.quantity} {item.unit}
+            </span>
+            <span className="flex items-center gap-1">
+              <button
+                onClick={() => void changeQuantity(-step)}
+                disabled={isBusy}
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-surface text-text-main shadow-xs transition-all hover:bg-border active:scale-95 disabled:opacity-40"
+                aria-label="Тоо хасах"
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => void changeQuantity(step)}
+                disabled={isBusy}
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-surface text-text-main shadow-xs transition-all hover:bg-border active:scale-95 disabled:opacity-40"
+                aria-label="Тоо нэмэх"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </span>
           </div>
         </div>
         <div className="rounded-2xl border border-border bg-surface-hover p-2.5">

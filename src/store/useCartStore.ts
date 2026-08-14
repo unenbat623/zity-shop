@@ -83,18 +83,26 @@ export const useCartStore = create<CartState>()(
         }
 
         if (requested > product.stock) {
-          // Боломжтой хэмжээгээр нь тааруулж нэмнэ
           if (currentQuantity >= product.stock) {
             return {
               ok: false,
               message: `"${product.name}" барааны нөөц ${product.stock} ${product.unit} л байна.`,
             };
           }
-          set((state) => ({
-            items: state.items.map((item) =>
-              item.id === product.id ? { ...item, quantity: product.stock } : item
-            ),
-          }));
+
+          // Боломжтой хэмжээгээр нь тааруулж нэмнэ.
+          // Бараа сагсанд БАЙХГҮЙ бол шинээр нэмэх ёстой — зөвхөн map хийвэл
+          // юу ч нэмэгдэхгүй мөртлөө "амжилттай" гэж хариулна.
+          set((state) =>
+            existing
+              ? {
+                  items: state.items.map((item) =>
+                    item.id === product.id ? { ...item, quantity: product.stock } : item
+                  ),
+                }
+              : { items: [...state.items, { ...product, quantity: product.stock }] }
+          );
+
           return {
             ok: true,
             message: `Нөөцөөр хязгаарлагдаж ${product.stock} ${product.unit} нэмэгдлээ.`,
