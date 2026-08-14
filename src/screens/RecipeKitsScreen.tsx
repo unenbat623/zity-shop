@@ -183,19 +183,19 @@ export function RecipeKitsScreen() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-3 p-4">
+                    <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <span className="block text-[10px] font-bold text-text-muted">
+                        <span className="block truncate text-[10px] font-bold text-text-muted">
                           {hasPrice
                             ? `${availableItems.length}/${bundle.productItems.length} орцын үнэ`
                             : 'Багцын үнэ'}
                         </span>
                         {!hasPrice ? (
-                          <span className="text-sm font-bold text-text-muted">
+                          <span className="text-xs font-bold leading-tight text-text-muted">
                             Үнэ тодорхойгүй
                           </span>
                         ) : bundle.discountPrice ? (
-                          <div className="flex items-baseline gap-2">
+                          <div className="flex flex-wrap items-baseline gap-x-2">
                             <span className="text-xl font-extrabold text-emerald-600">
                               {formatMnt(bundle.discountPrice)}
                             </span>
@@ -213,7 +213,7 @@ export function RecipeKitsScreen() {
                       <button
                         onClick={() => handleAddBundle(bundle)}
                         disabled={!hasPrice}
-                        className={`flex shrink-0 items-center gap-2 rounded-2xl px-5 py-3 text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-40 ${
+                        className={`flex w-full shrink-0 items-center justify-center gap-2 rounded-2xl px-5 py-3 text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-40 sm:w-auto ${
                           isJustAdded ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'
                         }`}
                       >

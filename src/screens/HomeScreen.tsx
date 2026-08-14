@@ -250,7 +250,7 @@ export function HomeScreen() {
           </div>
 
           {isLoadingProducts && products.length === 0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {Array.from({ length: 12 }).map((_, index) => (
                 <div key={index} className="overflow-hidden rounded-3xl border border-border bg-surface">
                   <Skeleton className="aspect-square w-full" />
@@ -263,7 +263,7 @@ export function HomeScreen() {
               ))}
             </div>
           ) : filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {filteredProducts.map((product) => (
                 <ProductCard key={product.id} product={product} onClick={setSelectedProduct} />
               ))}
