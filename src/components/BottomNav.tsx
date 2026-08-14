@@ -33,7 +33,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 px-2 py-2 pb-safe shadow-2xl backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl backdrop-blur-xl lg:hidden"
       aria-label="Үндсэн цэс"
     >
       <div className="mx-auto flex max-w-md items-center justify-around">

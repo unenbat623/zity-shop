@@ -104,8 +104,12 @@ export function AppShell({
 
       {stickyFooter && (
         <div
-          className={`fixed inset-x-0 z-30 border-t border-border bg-surface/95 px-4 py-3 shadow-2xl backdrop-blur-md lg:left-64 ${
-            hideBottomNav ? 'bottom-0 pb-safe' : 'bottom-[68px] lg:bottom-0 lg:pb-3'
+          // `py-3` ба `pb-safe` хоёул padding-bottom тавьдаг тул аль нь давамгайлах
+          // нь тодорхойгүй болдог — доод зайг нэг классаар шууд заана.
+          className={`fixed inset-x-0 z-30 border-t border-border bg-surface/95 px-4 pt-3 shadow-2xl backdrop-blur-md lg:left-64 ${
+            hideBottomNav
+              ? 'bottom-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]'
+              : 'bottom-[68px] pb-3 lg:bottom-0'
           }`}
         >
           <div className={`mx-auto ${MAX_WIDTH_CLASS[maxWidth]}`}>{stickyFooter}</div>

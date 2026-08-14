@@ -69,14 +69,14 @@ export function OdooSyncModal({ isOpen, onClose }: { isOpen: boolean; onClose: (
               {mode === 'bridge' ? 'Bridge' : 'Симуляц'}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
             <div className="rounded-xl border border-border bg-surface p-2.5">
               <span className="block text-[10px] text-text-muted">Датабэйс</span>
-              <span className="font-mono font-semibold text-text-main">{config.db}</span>
+              <span className="block truncate font-mono font-semibold text-text-main">{config.db}</span>
             </div>
             <div className="rounded-xl border border-border bg-surface p-2.5">
               <span className="block text-[10px] text-text-muted">Сүүлийн синк</span>
-              <span className="font-mono font-semibold text-text-main">
+              <span className="block truncate font-mono font-semibold text-text-main">
                 {formatTime(config.lastSyncTime)}
               </span>
             </div>

@@ -137,7 +137,7 @@ export function Header({ showSearch = true, onOpenMenu, title }: HeaderProps) {
               </div>
               <button
                 onClick={() => navigate(account ? '/profile' : '/login')}
-                className="flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-emerald-600 hover:underline"
+                className="-my-2 flex shrink-0 items-center gap-0.5 px-1 py-2.5 text-[11px] font-bold text-emerald-600 hover:underline"
               >
                 {selectedAddress ? 'Солих' : 'Нэмэх'} <ChevronDown className="h-3 w-3" />
               </button>

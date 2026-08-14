@@ -36,11 +36,11 @@ export function CategoryList() {
   }, {});
 
   return (
-    <div className="relative mb-5 mt-2">
+    <div className="relative mb-5 mt-2 sm:px-11">
       {showLeftArrow && (
         <button
           onClick={() => scrollBy(-240)}
-          className="absolute left-0 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface shadow-md sm:flex"
+          className="absolute left-0 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface shadow-md transition-colors hover:bg-surface-hover sm:flex"
           aria-label="Зүүн тийш гүйлгэх"
         >
           <ChevronLeft className="h-4 w-4 text-text-muted" />
@@ -100,7 +100,7 @@ export function CategoryList() {
       {showRightArrow && (
         <button
           onClick={() => scrollBy(240)}
-          className="absolute right-0 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface shadow-md sm:flex"
+          className="absolute right-0 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface shadow-md transition-colors hover:bg-surface-hover sm:flex"
           aria-label="Баруун тийш гүйлгэх"
         >
           <ChevronRight className="h-4 w-4 text-text-muted" />

@@ -184,7 +184,7 @@ export function CheckoutScreen() {
                   </h2>
                   <button
                     onClick={() => navigate('/profile')}
-                    className="text-[11px] font-bold text-emerald-600 hover:underline"
+                    className="-my-2 shrink-0 px-2 py-2 text-[11px] font-bold text-emerald-600 hover:underline"
                   >
                     Хаяг удирдах
                   </button>

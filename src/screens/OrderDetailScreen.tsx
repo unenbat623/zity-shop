@@ -106,7 +106,7 @@ export function OrderDetailScreen() {
             </span>
             <button
               onClick={() => void handleCopyRef()}
-              className="flex items-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-bold text-white transition-colors hover:bg-white/20"
+              className="flex shrink-0 items-center gap-1 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[10px] font-bold text-white transition-colors hover:bg-white/20"
             >
               <Copy className="h-3 w-3" /> Хуулах
             </button>

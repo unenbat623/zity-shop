@@ -188,7 +188,7 @@ export function CartScreen() {
                   </div>
                   <button
                     onClick={() => navigate(account ? '/profile' : '/login')}
-                    className="shrink-0 text-xs font-bold text-emerald-600 hover:underline"
+                    className="-my-2 shrink-0 px-2 py-2 text-xs font-bold text-emerald-600 hover:underline"
                   >
                     {selectedAddress ? 'Солих' : 'Нэмэх'}
                   </button>
@@ -262,7 +262,7 @@ export function CartScreen() {
                         </div>
                         <button
                           onClick={() => removeItem(item.id)}
-                          className="p-1 text-text-muted transition-colors hover:text-red-500"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-red-500"
                           aria-label={`${item.name} хасах`}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -275,15 +275,15 @@ export function CartScreen() {
                         </p>
                       )}
 
-                      <div className="mt-3 flex items-center justify-between gap-2">
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                         <div className="text-sm font-extrabold text-text-main sm:text-base">
                           {formatMnt((item.discountPrice ?? item.price) * item.quantity)}
                         </div>
 
-                        <div className="flex items-center gap-3 rounded-full border border-border bg-surface-hover px-3 py-1">
+                        <div className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface-hover px-2 py-1">
                           <button
                             onClick={() => decreaseQuantity(item.id)}
-                            className="flex h-6 w-6 items-center justify-center rounded-full bg-surface text-text-main shadow-xs transition-all hover:bg-border active:scale-95"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-text-main shadow-xs transition-all hover:bg-border active:scale-95"
                             aria-label="Тоо хасах"
                           >
                             <Minus className="h-3 w-3" />
@@ -294,7 +294,7 @@ export function CartScreen() {
                           <button
                             onClick={() => handleIncrease(item.id)}
                             disabled={item.quantity >= item.stock}
-                            className="flex h-6 w-6 items-center justify-center rounded-full bg-surface text-text-main shadow-xs transition-all hover:bg-border active:scale-95 disabled:opacity-40"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-text-main shadow-xs transition-all hover:bg-border active:scale-95 disabled:opacity-40"
                             aria-label="Тоо нэмэх"
                           >
                             <Plus className="h-3 w-3" />
@@ -326,7 +326,7 @@ export function CartScreen() {
                   </div>
                   <button
                     onClick={removeCoupon}
-                    className="text-xs font-bold text-red-500 hover:underline"
+                    className="-my-2 shrink-0 px-2 py-2 text-xs font-bold text-red-500 hover:underline"
                   >
                     Устгах
                   </button>
