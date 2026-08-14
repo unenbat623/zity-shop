@@ -11,6 +11,7 @@ import {
 import { odooService } from '../services/odooService';
 import { ZityChefService } from '../services/zityChefService';
 import { useAuthStore } from './useAuthStore';
+import { useCatalogStore } from './useCatalogStore';
 
 /**
  * Захиалгын төлөв.
@@ -49,6 +50,9 @@ export interface CreateOrderInput {
 interface OrderState {
   orders: Order[];
   isCreating: boolean;
+  isSyncingFromChef: boolean;
+  /** Chef DB-ээс сүүлд амжилттай татсан хугацаа */
+  chefOrdersFetchedAt: number | null;
 
   createOrder: (input: CreateOrderInput) => Promise<Order>;
   getOrderById: (id: string) => Order | undefined;
@@ -56,6 +60,8 @@ interface OrderState {
   cancelOrder: (id: string) => { ok: boolean; message: string };
   /** Синк амжилтгүй болсон захиалгыг дахин илгээх */
   retrySync: (id: string) => Promise<void>;
+  /** Chef DB-ээс захиалгуудыг татаж локалтай нэгтгэнэ */
+  syncFromChef: (options?: { force?: boolean }) => Promise<void>;
   /** Захиалгын явцыг автоматаар ахиулна. Цэвэрлэх функц буцаана. */
   startTracking: () => () => void;
   /** Одоогийн хэрэглэгчийн захиалгууд (зочин үед локал захиалгууд) */
@@ -76,11 +82,16 @@ function statusRank(status: OrderStatus): number {
   return index === -1 ? -1 : index;
 }
 
+/** Chef-ээс дахин татахгүй байх хугацаа */
+const CHEF_ORDERS_FRESH_MS = 30_000;
+
 export const useOrderStore = create<OrderState>()(
   persist(
     (set, get) => ({
       orders: [],
       isCreating: false,
+      isSyncingFromChef: false,
+      chefOrdersFetchedAt: null,
 
       createOrder: async (input) => {
         set({ isCreating: true });
@@ -134,6 +145,9 @@ export const useOrderStore = create<OrderState>()(
                     : 'Odoo ERP захиалга үүсгэсэнгүй.',
               };
 
+        const chefOrderRef =
+          chefResult.status === 'fulfilled' ? chefResult.value.chefOrderRef : undefined;
+
         const chefSync: Order['chefSync'] =
           chefResult.status === 'fulfilled' && chefResult.value.success
             ? { status: 'success', message: chefResult.value.message, syncedAt: new Date().toISOString() }
@@ -157,6 +171,7 @@ export const useOrderStore = create<OrderState>()(
               ? {
                   ...order,
                   odooOrderRef,
+                  chefOrderRef,
                   odooSync,
                   chefSync,
                   status: odooSync.status === 'success' ? 'odoo_synced' : 'pending',
@@ -194,6 +209,12 @@ export const useOrderStore = create<OrderState>()(
       cancelOrder: (id) => {
         const order = get().getOrderById(id);
         if (!order) return { ok: false, message: 'Захиалга олдсонгүй.' };
+
+        // Chef дээр үүссэн захиалгыг Delguur-ээс цуцлах API байхгүй —
+        // локал төлвийг л өөрчилвөл хоёр систем зөрнө
+        if (order.isRemote) {
+          return { ok: false, message: 'Энэ захиалгыг Zity Chef аппаас цуцална уу.' };
+        }
 
         if (order.status === 'delivered') {
           return { ok: false, message: 'Хүргэгдсэн захиалгыг цуцлах боломжгүй.' };
@@ -267,6 +288,69 @@ export const useOrderStore = create<OrderState>()(
         }
 
         await Promise.allSettled(tasks);
+      },
+
+      /**
+       * Chef DB-ээс захиалгуудыг татаж локалтай нэгтгэнэ.
+       *
+       * Нэгтгэх дүрэм:
+       *  - Локал захиалга нь илүү дэлгэрэнгүй (хаяг, SKU, Odoo ref) тул давуу эрхтэй.
+       *    Chef-ээс зөвхөн ТӨЛӨВ-ийг нь авч шинэчилнэ.
+       *  - Chef дээр байгаа боловч локалд байхгүй захиалгыг (өөр төхөөрөмж эсвэл
+       *    Chef аппаас хийсэн) уншиж нэмнэ.
+       */
+      syncFromChef: async (options) => {
+        const account = useAuthStore.getState().account;
+        if (!account) return;
+
+        const state = get();
+        if (state.isSyncingFromChef) return;
+        if (
+          !options?.force &&
+          state.chefOrdersFetchedAt &&
+          Date.now() - state.chefOrdersFetchedAt < CHEF_ORDERS_FRESH_MS
+        ) {
+          return;
+        }
+
+        set({ isSyncingFromChef: true });
+
+        const result = await ZityChefService.fetchOrders(useCatalogStore.getState().products);
+
+        if (!result.isLive) {
+          set({ isSyncingFromChef: false });
+          return;
+        }
+
+        set((current) => {
+          const remoteByRef = new Map(result.data.map((order) => [order.chefOrderRef, order]));
+
+          // 1) Локал захиалгын төлвийг Chef-ийн төлвөөр шинэчилнэ
+          const merged = current.orders.map((local) => {
+            const remote = local.chefOrderRef ? remoteByRef.get(local.chefOrderRef) : undefined;
+            if (!remote) return local;
+
+            remoteByRef.delete(local.chefOrderRef!);
+
+            // Chef дээр цуцлагдсан/хүргэгдсэн бол локал төлвийг дагуулна
+            const shouldAdoptStatus =
+              remote.status === 'cancelled' || statusRank(remote.status) > statusRank(local.status);
+
+            return shouldAdoptStatus ? { ...local, status: remote.status } : local;
+          });
+
+          // 2) Зөвхөн Chef дээр байгаа захиалгуудыг нэмнэ
+          const remoteOnly = Array.from(remoteByRef.values()).map((order) => ({
+            ...order,
+            userId: account.id,
+          }));
+
+          const all = [...merged, ...remoteOnly].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+
+          return { orders: all, isSyncingFromChef: false, chefOrdersFetchedAt: Date.now() };
+        });
       },
 
       /**

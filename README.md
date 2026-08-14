@@ -15,6 +15,12 @@ Odoo ERP-тэй нэгдсэн design system болон нэгдсэн хэрэ�
 - `/orders`, `/checkout`, `/profile`, `/zity-fridge` хуудсууд хамгаалагдсан
 - `/odoo-admin` зөвхөн `VITE_ADMIN_EMAILS` жагсаалтад байгаа хэрэглэгчид
 
+### ⚡ Гүйцэтгэл & PWA
+- Route бүр тусад нь ачаалагдана (`React.lazy`) — эхний ачаалалт хөнгөн
+- Vendor код (react / supabase / motion) тусдаа chunk — cache-д удаан үлдэнэ
+- Service worker: суулгаж болдог, офлайн ажиллана. Chef API нь **NetworkFirst**
+  тул хуучирсан нөөц/үнэ харуулахгүй
+
 ### 🍳 Zity Chef интеграц
 - Барааны каталог, жорын орц багц, хөргөгчийн нөөц нь Chef backend-ээс live татагдана
 - Бүх дэлгэц **нэг caталог store**-оос өгөгдөл авна — давхар fetch, зөрүүтэй өгөгдөл байхгүй
@@ -29,6 +35,8 @@ Odoo ERP-тэй нэгдсэн design system болон нэгдсэн хэрэ�
 - Купон, үнэгүй хүргэлтийн босго, доод дүнгийн шалгалт
 
 ### 📦 Захиалга
+- Захиалгын түүх **Chef DB-ээс** уншигдана — өөр төхөөрөмжөөс нэвтрэхэд ч
+  алдагдахгүй, Chef аппаас хийсэн захиалга ч энд харагдана
 - Odoo болон Chef рүү **зэрэг** синк — аль нэг нь унасан ч захиалга алдагдахгүй
 - Синкийн төлөв захиалга тус бүрт харагдана, амжилтгүй бол **дахин илгээх** товч
 - Бэлнээр төлөх захиалга хүргэгдэх үед л "төлөгдсөн" болно
@@ -53,7 +61,9 @@ Odoo ERP-тэй нэгдсэн design system болон нэгдсэн хэрэ�
 | Frontend | React 19, TypeScript (strict), Vite 6 |
 | State | Zustand 5 (+ persist) |
 | Styling | Tailwind CSS 4 (CSS variable token) |
-| Auth | Supabase Auth (REST) |
+| Auth | Supabase Auth (`@supabase/supabase-js`, PKCE) |
+| Тест | Vitest |
+| PWA | vite-plugin-pwa (Workbox) |
 | Icons | lucide-react |
 
 ---
@@ -63,7 +73,7 @@ Odoo ERP-тэй нэгдсэн design system болон нэгдсэн хэрэ�
 ```bash
 npm install
 cp .env.example .env      # утгуудаа бөглөнө
-npm run dev               # http://localhost:3000
+npm run dev               # http://localhost:3005
 ```
 
 ### Zity Chef-тэй хамт ажиллуулах
@@ -117,11 +127,16 @@ VITE_ADMIN_EMAILS=admin@zity.mn
 ### Скриптүүд
 
 ```bash
-npm run dev       # dev сервер (Chef API-г /api/zity-chef proxy-оор дамжуулна)
-npm run lint      # TypeScript strict шалгалт
-npm run build     # production build
-npm run preview   # build-ийг урьдчилан үзэх
+npm run dev        # dev сервер, порт 3005 (Chef API-г proxy-оор дамжуулна)
+npm run test       # vitest — сагс, Chef хөрвүүлэлтийн тестүүд
+npm run test:watch # тестийг watch горимд
+npm run typecheck  # TypeScript strict шалгалт
+npm run build      # typecheck + production build (PWA service worker үүснэ)
+npm run preview    # build-ийг урьдчилан үзэх
 ```
+
+> `npm run dev` нь порт 3005-ыг **хатуу** барина. Банд бол алдаа өгч зогсоно —
+> порт чимээгүй шилжвэл OAuth-ийн буцах хаяг эвдэрдэг.
 
 ---
 
@@ -139,6 +154,7 @@ src/
 │   ├── supabaseAuthService.ts
 │   └── odooService.ts    # bridge / симуляц горим
 ├── store/                # zustand: auth, catalog, cart, order, odoo, theme, toast, search
+│   └── *.test.ts         # цэвэр логикийн тестүүд
 ├── components/           # Header, BottomNav, ProductCard, RequireAuth, ui/*
 ├── screens/              # хуудас бүр
 └── types/                # нэгдсэн TypeScript интерфейс
