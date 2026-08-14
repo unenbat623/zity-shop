@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ChefHat,
   Clock,
+  Info,
   Layers,
   RefreshCw,
   ShoppingBag,
@@ -101,6 +102,10 @@ export function RecipeKitsScreen() {
               ))
             : recipeKits.map((bundle) => {
                 const isJustAdded = addedBundleId === bundle.id;
+                const availableItems = bundle.productItems.filter(
+                  (item) => item.isAvailable !== false
+                );
+                const hasPrice = bundle.price > 0;
 
                 return (
                   <article
@@ -143,20 +148,34 @@ export function RecipeKitsScreen() {
                         </div>
 
                         <h3 className="mb-2 text-xs font-extrabold text-text-main">Багцад дагалдах орцууд</h3>
-                        <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-2 text-xs">
                           {bundle.productItems.map((item) => (
                             <div
                               key={item.productId}
-                              className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface-hover p-2.5"
+                              className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 ${
+                                item.isAvailable === false
+                                  ? 'border-dashed border-border bg-surface opacity-60'
+                                  : 'border-border bg-surface-hover'
+                              }`}
                             >
                               <span className="flex min-w-0 items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                                {item.isAvailable === false ? (
+                                  <Info className="h-4 w-4 shrink-0 text-text-subtle" />
+                                ) : (
+                                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                                )}
                                 <span className="truncate font-semibold text-text-main">
                                   {item.productName}
                                 </span>
                               </span>
-                              <span className="shrink-0 font-mono text-[11px] font-bold text-emerald-600">
-                                {item.requiredQty} {item.unit}
+                              <span
+                                className={`shrink-0 font-mono text-[11px] font-bold ${
+                                  item.isAvailable === false ? 'text-text-subtle' : 'text-emerald-600'
+                                }`}
+                              >
+                                {item.isAvailable === false
+                                  ? 'дэлгүүрт алга'
+                                  : `${item.requiredQty} ${item.unit}`}
                               </span>
                             </div>
                           ))}
@@ -165,9 +184,17 @@ export function RecipeKitsScreen() {
                     </div>
 
                     <div className="flex items-center justify-between gap-3 p-4">
-                      <div>
-                        <span className="block text-[10px] font-bold text-text-muted">Багцын үнэ</span>
-                        {bundle.discountPrice ? (
+                      <div className="min-w-0">
+                        <span className="block text-[10px] font-bold text-text-muted">
+                          {hasPrice
+                            ? `${availableItems.length}/${bundle.productItems.length} орцын үнэ`
+                            : 'Багцын үнэ'}
+                        </span>
+                        {!hasPrice ? (
+                          <span className="text-sm font-bold text-text-muted">
+                            Үнэ тодорхойгүй
+                          </span>
+                        ) : bundle.discountPrice ? (
                           <div className="flex items-baseline gap-2">
                             <span className="text-xl font-extrabold text-emerald-600">
                               {formatMnt(bundle.discountPrice)}
@@ -185,7 +212,8 @@ export function RecipeKitsScreen() {
 
                       <button
                         onClick={() => handleAddBundle(bundle)}
-                        className={`flex shrink-0 items-center gap-2 rounded-2xl px-5 py-3 text-xs font-bold text-white shadow-md transition-all active:scale-95 ${
+                        disabled={!hasPrice}
+                        className={`flex shrink-0 items-center gap-2 rounded-2xl px-5 py-3 text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-40 ${
                           isJustAdded ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'
                         }`}
                       >

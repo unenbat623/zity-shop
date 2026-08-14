@@ -131,8 +131,16 @@ export const useCartStore = create<CartState>()(
         const catalog = useCatalogStore.getState().products;
         let addedCount = 0;
         const skipped: string[] = [];
+        const unavailable: string[] = [];
 
         bundle.productItems.forEach((bundleItem) => {
+          // Дэлгүүрт байхгүй орцыг (давс, перец гэх мэт) сагсанд нэмэхгүй —
+          // үнэ нь мэдэгдэхгүй тул нийт дүн буруу болно
+          if (bundleItem.isAvailable === false) {
+            unavailable.push(bundleItem.productName);
+            return;
+          }
+
           const matched =
             catalog.find((product) => product.id === bundleItem.productId) ??
             catalog.find(
@@ -162,14 +170,24 @@ export const useCartStore = create<CartState>()(
         });
 
         if (addedCount === 0) {
-          return { ok: false, message: 'Багцын орцууд одоогоор нөөцгүй байна.' };
-        }
-        if (skipped.length > 0) {
           return {
-            ok: true,
-            message: `${addedCount} орц нэмэгдлээ. Нөөцгүй: ${skipped.join(', ')}.`,
+            ok: false,
+            message:
+              unavailable.length > 0
+                ? `Энэ багцын орцууд дэлгүүрт байхгүй байна: ${unavailable.join(', ')}.`
+                : 'Багцын орцууд одоогоор нөөцгүй байна.',
           };
         }
+
+        const notes = [
+          skipped.length > 0 ? `нөөцгүй: ${skipped.join(', ')}` : '',
+          unavailable.length > 0 ? `дэлгүүрт байхгүй: ${unavailable.join(', ')}` : '',
+        ].filter(Boolean);
+
+        if (notes.length > 0) {
+          return { ok: true, message: `${addedCount} орц нэмэгдлээ (${notes.join('; ')}).` };
+        }
+
         return { ok: true, message: `"${bundle.name}" багцын ${addedCount} орц сагсанд нэмэгдлээ.` };
       },
 

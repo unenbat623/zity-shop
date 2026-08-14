@@ -36,6 +36,13 @@ export interface RecipeIngredientItem {
   requiredQty: number;
   unit: string;
   pricePerUnit: number;
+  /**
+   * Уг орц дэлгүүрийн каталогт байгаа эсэх.
+   *
+   * `false` бол үнэ нь мэдэгдэхгүй тул багцын үнэд ОРОХГҮЙ, сагсанд ч
+   * нэмэгдэхгүй. Тодорхойлоогүй бол (локал багцууд) байгаад тооцно.
+   */
+  isAvailable?: boolean;
 }
 
 export interface FridgeItem {
