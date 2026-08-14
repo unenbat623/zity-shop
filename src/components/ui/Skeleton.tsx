@@ -1,13 +1,15 @@
 import React from 'react';
-import { cn } from "../../lib/utils";
+import { cn } from '../../lib/utils';
 
-function Skeleton({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+/**
+ * Ачаалж байгааг илэрхийлэх placeholder.
+ * Өнгө нь theme token-оос ирдэг тул харанхуй горимд ч зөв харагдана.
+ */
+function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("animate-pulse rounded-md bg-gray-200", className)}
+      aria-hidden="true"
+      className={cn('animate-pulse rounded-md bg-surface-hover', className)}
       {...props}
     />
   );

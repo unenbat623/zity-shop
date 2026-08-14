@@ -1,132 +1,177 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Header } from '../components/Header';
-import { BottomNav } from '../components/BottomNav';
-import { ZityChefService } from '../services/zityChefService';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ChefHat,
+  Clock3,
+  Database,
+  PackageOpen,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
+
+import { AppShell } from '../components/AppShell';
+import { Skeleton } from '../components/ui/Skeleton';
+import { useCatalogStore } from '../store/useCatalogStore';
+import { useToastStore } from '../store/useToastStore';
 import { FridgeItem } from '../types';
-import { ChefHat, Database, RefreshCw, PackageOpen, Clock3, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { formatDateTime } from '../lib/format';
+
+/** Энэ хоногоос бага үлдсэн орцыг анхааруулж харуулна */
+const EXPIRY_WARNING_DAYS = 3;
+
+function expiryTone(days: number): { className: string; label: string } {
+  if (days <= 0) return { className: 'text-red-500', label: 'Хугацаа дууссан' };
+  if (days <= EXPIRY_WARNING_DAYS) return { className: 'text-amber-500', label: `${days} хоног` };
+  return { className: 'text-text-main', label: `${days} хоног` };
+}
 
 export function FridgeScreen() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<FridgeItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLive, setIsLive] = useState(false);
+  const showToast = useToastStore((state) => state.show);
 
-  const loadFridge = async () => {
-    setIsLoading(true);
-    const result = await ZityChefService.fetchFridgeItems();
-    setItems(result.items);
-    setIsLive(result.isLive);
-    setIsLoading(false);
-  };
+  const { fridgeItems, isLoadingFridge, connection, loadFridge } = useCatalogStore();
 
   useEffect(() => {
     void loadFridge();
-  }, []);
+  }, [loadFridge]);
+
+  const handleRefresh = async () => {
+    await loadFridge({ force: true });
+    showToast('Хөргөгчийн мэдээлэл шинэчлэгдлээ.', 'success');
+  };
+
+  const isLive = connection.status === 'live';
+  const expiringSoon = fridgeItems.filter((item) => item.expiryDays <= EXPIRY_WARNING_DAYS).length;
 
   return (
-    <div className="min-h-screen bg-background pb-28 text-text-main">
-      <Header />
-
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 p-6 text-white shadow-xl border border-emerald-500/20">
+    <AppShell showSearch={false} title="Zity Chef хөргөгч" maxWidth="lg">
+        <section className="zity-brand-surface mb-6 overflow-hidden rounded-3xl p-6 shadow-xl">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="mb-2 flex items-center gap-2">
-                <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
-                  <ChefHat className="h-4 w-4 text-emerald-400" /> Zity Chef Fridge
-                </span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-black text-white mb-2">Хөргөгчийн орц бүртгэл</h1>
-              <p className="text-xs sm:text-sm text-emerald-100/80 leading-relaxed max-w-xl">
-                Агуулах болон захиалгын дараа Zity Chef системд нэмэгдсэн шинэхэн орцуудыг энд харуулна.
+              <span className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-200">
+                <ChefHat className="h-4 w-4" /> Zity Chef хөргөгч
+              </span>
+              <h1 className="mb-2 text-2xl font-black text-white sm:text-3xl">Хөргөгчийн орц бүртгэл</h1>
+              <p className="max-w-xl text-xs leading-relaxed text-emerald-100/80 sm:text-sm">
+                Захиалсан бараа Zity Chef хөргөгчид автоматаар нэмэгдэж, жор бэлтгэхэд ашиглагдана.
               </p>
             </div>
 
             <button
               onClick={() => navigate(-1)}
-              className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-3 py-2 text-[11px] font-bold text-white border border-white/10 hover:bg-white/15"
+              className="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-[11px] font-bold text-white transition-colors hover:bg-white/20"
             >
               <ArrowLeft className="h-4 w-4" /> Буцах
             </button>
           </div>
-        </div>
+        </section>
 
-        <div className="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-3xl border border-border bg-surface p-4 shadow-xs">
+        <div className="zity-card mb-5 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10">
               <Database className="h-5 w-5 text-emerald-500" />
-            </div>
+            </span>
             <div>
-              <p className="text-xs font-extrabold text-text-main">Zity Chef inventory sync</p>
-              <p className="text-[10px] text-text-muted">
-                {isLive ? 'Холболт амжилттай, live data синк хийж байна' : 'Local fallback mode'}
+              <p className="flex items-center gap-1.5 text-xs font-extrabold text-text-main">
+                Inventory sync
+                {isLive ? (
+                  <Wifi className="h-3.5 w-3.5 text-emerald-500" />
+                ) : (
+                  <WifiOff className="h-3.5 w-3.5 text-amber-500" />
+                )}
               </p>
+              <p className="text-[10px] leading-relaxed text-text-muted">{connection.message}</p>
             </div>
           </div>
 
           <button
-            onClick={() => void loadFridge()}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition-all hover:bg-emerald-700 active:scale-95"
+            onClick={() => void handleRefresh()}
+            disabled={isLoadingFridge}
+            className="zity-btn-primary shrink-0 px-4 py-2.5 text-xs"
           >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            {isLoading ? 'Синк хийж байна...' : 'Одоо синк'}
+            <RefreshCw className={`h-4 w-4 ${isLoadingFridge ? 'animate-spin' : ''}`} />
+            {isLoadingFridge ? 'Синк хийж байна...' : 'Одоо синк'}
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {isLoading ? (
+        {expiringSoon > 0 && (
+          <div className="mb-5 flex items-center gap-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-[11px] font-bold text-amber-600">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {expiringSoon} орцны хадгалах хугацаа дуусах дөхөж байна.
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {isLoadingFridge && fridgeItems.length === 0 ? (
             Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="rounded-3xl border border-border bg-surface p-4 shadow-xs animate-pulse">
-                <div className="h-4 w-24 rounded bg-surface-hover mb-4" />
-                <div className="h-10 w-full rounded bg-surface-hover mb-3" />
-                <div className="h-4 w-28 rounded bg-surface-hover" />
+              <div key={index} className="zity-card space-y-3 p-4">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-4 w-28" />
               </div>
             ))
-          ) : items.length > 0 ? (
-            items.map((item) => (
-              <div key={item.id} className="rounded-3xl border border-border bg-surface p-4 shadow-xs hover:border-emerald-500/30 transition-all">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-500/10 text-xl">🥬</span>
-                    <div>
-                      <h2 className="text-sm font-extrabold text-text-main">{item.name}</h2>
-                      <p className="text-[10px] font-bold text-emerald-600">{item.category}</p>
-                    </div>
-                  </div>
-                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-[11px] text-text-muted">
-                  <div className="rounded-2xl bg-surface-hover p-2.5 border border-border">
-                    <div className="font-bold uppercase text-[9px] tracking-wide text-text-muted">Нөөц</div>
-                    <div className="mt-1 text-sm font-extrabold text-text-main">{item.quantity} {item.unit}</div>
-                  </div>
-                  <div className="rounded-2xl bg-surface-hover p-2.5 border border-border">
-                    <div className="font-bold uppercase text-[9px] tracking-wide text-text-muted">Дуусах</div>
-                    <div className="mt-1 text-sm font-extrabold text-text-main">{item.expiryDays} хоног</div>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between rounded-2xl border border-border bg-surface-hover px-3 py-2 text-[10px] text-text-muted">
-                  <span className="flex items-center gap-1.5">
-                    <Clock3 className="h-3.5 w-3.5 text-amber-500" />
-                    {new Date(item.lastSyncedAt).toLocaleString('mn-MN', { timeStyle: 'short', dateStyle: 'short' })}
-                  </span>
-                  <span className="font-bold text-emerald-600">{item.source}</span>
-                </div>
-              </div>
-            ))
+          ) : fridgeItems.length > 0 ? (
+            fridgeItems.map((item) => <FridgeCard key={item.id} item={item} />)
           ) : (
-            <div className="col-span-full rounded-3xl border border-dashed border-border bg-surface p-8 text-center text-text-muted">
+            <div className="col-span-full rounded-3xl border border-dashed border-border bg-surface p-10 text-center">
               <PackageOpen className="mx-auto mb-3 h-8 w-8 text-emerald-500" />
-              <p className="text-sm font-bold text-text-main">Хөргөгчийн мэдээлэл байхгүй байна.</p>
+              <p className="text-sm font-bold text-text-main">Хөргөгч хоосон байна.</p>
+              <p className="mt-1 text-xs text-text-muted">
+                Захиалга хийсний дараа орцууд энд автоматаар нэмэгдэнэ.
+              </p>
+              <button onClick={() => navigate('/')} className="zity-btn-primary mx-auto mt-4 px-5 py-2.5 text-xs">
+                Дэлгүүр хэсэх
+              </button>
             </div>
           )}
         </div>
-      </main>
+      </AppShell>
+  );
+}
 
-      <BottomNav />
-    </div>
+function FridgeCard({ item }: { item: FridgeItem }) {
+  const expiry = expiryTone(item.expiryDays);
+
+  return (
+    <article className="zity-card p-4 transition-all hover:border-emerald-500/30">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-xl">
+            {item.emoji || '🥬'}
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-extrabold text-text-main">{item.name}</h2>
+            <p className="truncate text-[10px] font-bold text-emerald-600">{item.category}</p>
+          </div>
+        </div>
+        {item.expiryDays <= EXPIRY_WARNING_DAYS && (
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-[11px]">
+        <div className="rounded-2xl border border-border bg-surface-hover p-2.5">
+          <div className="text-[9px] font-bold uppercase tracking-wide text-text-muted">Нөөц</div>
+          <div className="mt-1 text-sm font-extrabold text-text-main">
+            {item.quantity} {item.unit}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border bg-surface-hover p-2.5">
+          <div className="text-[9px] font-bold uppercase tracking-wide text-text-muted">Хадгалах</div>
+          <div className={`mt-1 text-sm font-extrabold ${expiry.className}`}>{expiry.label}</div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-border bg-surface-hover px-3 py-2 text-[10px] text-text-muted">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Clock3 className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <span className="truncate">{formatDateTime(item.lastSyncedAt)}</span>
+        </span>
+        <span className="shrink-0 font-bold text-emerald-600">{item.source}</span>
+      </div>
+    </article>
   );
 }

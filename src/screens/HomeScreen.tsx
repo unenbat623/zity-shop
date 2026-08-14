@@ -1,289 +1,337 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Header } from '../components/Header';
+import {
+  ArrowRight,
+  ChefHat,
+  Clock,
+  Database,
+  Flame,
+  Layers,
+  Plus,
+  SearchX,
+  Sparkles,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
+
+import { AppShell } from '../components/AppShell';
 import { CategoryList } from '../components/CategoryList';
 import { ProductCard } from '../components/ProductCard';
 import { BottomSheet } from '../components/ui/BottomSheet';
 import { OdooSyncModal } from '../components/OdooSyncModal';
-import { BottomNav } from '../components/BottomNav';
-import { MOCK_PRODUCTS, RECIPE_BUNDLES } from '../constants/mockData';
+import { Skeleton } from '../components/ui/Skeleton';
+
+import { CATEGORIES } from '../constants/mockData';
 import { Product, RecipeBundle } from '../types';
 import { useCartStore } from '../store/useCartStore';
 import { useSearchStore } from '../store/useSearchStore';
-import { useOdooStore } from '../store/useOdooStore';
-import { ZityChefService } from '../services/zityChefService';
-import { Info, Clock, Flame, Plus, ChefHat, Database, Sparkles, ShieldCheck, ArrowRight, Layers, Wifi } from 'lucide-react';
+import { useCatalogStore } from '../store/useCatalogStore';
+import { useToastStore } from '../store/useToastStore';
+import { formatMnt } from '../lib/format';
 
 export function HomeScreen() {
   const navigate = useNavigate();
+  const showToast = useToastStore((state) => state.show);
+
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isOdooModalOpen, setIsOdooModalOpen] = useState(false);
-  const [productsList, setProductsList] = useState<Product[]>(MOCK_PRODUCTS);
-  const [recipeKits, setRecipeKits] = useState<RecipeBundle[]>(RECIPE_BUNDLES);
-  const [isChefServerLive, setIsChefServerLive] = useState<boolean>(false);
 
   const { addItem, addBundle } = useCartStore();
-  const { searchQuery, selectedCategory } = useSearchStore();
+  const { searchQuery, selectedCategorySlug } = useSearchStore();
+  const { products, recipeKits, connection, isLoadingProducts, loadStorefront } = useCatalogStore();
 
   useEffect(() => {
-    let isMounted = true;
-    async function loadLiveData() {
-      const prodRes = await ZityChefService.fetchStoreProducts();
-      const kitRes = await ZityChefService.fetchRecipeKits();
-      if (isMounted) {
-        if (prodRes.products && prodRes.products.length > 0) {
-          setProductsList(prodRes.products);
-        }
-        if (kitRes.bundles && kitRes.bundles.length > 0) {
-          setRecipeKits(kitRes.bundles);
-        }
-        setIsChefServerLive(prodRes.isLive || kitRes.isLive);
-      }
-    }
-    loadLiveData();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    void loadStorefront();
+  }, [loadStorefront]);
 
-  const handleProductClick = (product: Product) => {
-    setSelectedProduct(product);
-  };
+  const filteredProducts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return products.filter((product) => {
+      const matchesCategory = selectedCategorySlug
+        ? product.categorySlug === selectedCategorySlug
+        : true;
+
+      if (!query) return matchesCategory;
+
+      const matchesSearch =
+        product.name.toLowerCase().includes(query) ||
+        product.category.toLowerCase().includes(query) ||
+        product.sku.toLowerCase().includes(query) ||
+        (product.brand?.toLowerCase().includes(query) ?? false) ||
+        (product.tags?.some((tag) => tag.toLowerCase().includes(query)) ?? false);
+
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, searchQuery, selectedCategorySlug]);
+
+  const isFiltering = Boolean(searchQuery.trim() || selectedCategorySlug);
+  const selectedCategoryName = CATEGORIES.find((item) => item.slug === selectedCategorySlug)?.name;
+  const isChefLive = connection.status === 'live';
+  /** Нүүрэн дээр эхний 3 багц — үлдсэнийг тусдаа хуудсанд */
+  const featuredKits = recipeKits.slice(0, 3);
 
   const handleAddBundle = (bundle: RecipeBundle) => {
-    addBundle(bundle);
+    const result = addBundle(bundle);
+    showToast(result.message, result.ok ? 'success' : 'warning');
   };
 
-  const filteredProducts = productsList.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (product.tags && product.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())));
-    const matchesCategory = selectedCategory ? product.category.includes(selectedCategory) : true;
-
-    return matchesSearch && matchesCategory;
-  });
-
-  const isFiltering = searchQuery || selectedCategory;
+  const handleAddSelectedProduct = () => {
+    if (!selectedProduct) return;
+    const result = addItem(selectedProduct);
+    showToast(result.message, result.ok ? 'success' : 'warning');
+    if (result.ok) setSelectedProduct(null);
+  };
 
   return (
-    <div className="min-h-screen bg-background pb-28 text-text-main">
-      <Header onOpenOdooModal={() => setIsOdooModalOpen(true)} />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2">
-        {/* Category Carousel */}
+    <AppShell>
+      <>
         <CategoryList />
 
-        {/* Hero Integration Banner */}
+        {/* Hero */}
         {!isFiltering && (
           <section className="mb-8">
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-emerald-500/20">
+            <div className="zity-brand-surface relative overflow-hidden rounded-3xl p-6 shadow-xl sm:p-8">
               <div className="relative z-10 max-w-xl">
-                <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-200">
                     <Sparkles className="h-3.5 w-3.5 text-amber-300" /> Zity Chef × Odoo ERP
                   </span>
-                  {isChefServerLive && (
-                    <span className="rounded-full bg-emerald-500/30 border border-emerald-400/40 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-200 flex items-center gap-1">
-                      <Wifi className="h-3 w-3 text-emerald-300 animate-pulse" /> Zity Chef Backend Live
-                    </span>
-                  )}
+                  <span
+                    className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-extrabold ${
+                      isChefLive
+                        ? 'border-emerald-400/40 bg-emerald-500/25 text-emerald-100'
+                        : 'border-amber-400/30 bg-amber-500/20 text-amber-100'
+                    }`}
+                    title={connection.message}
+                  >
+                    {isChefLive ? (
+                      <>
+                        <Wifi className="h-3 w-3 animate-pulse" /> Chef backend live
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff className="h-3 w-3" /> Локал каталог
+                      </>
+                    )}
+                  </span>
                 </div>
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-snug mb-3 text-white">
+
+                <h1 className="mb-3 text-2xl font-black leading-snug tracking-tight text-white sm:text-3xl lg:text-4xl">
                   Хоолны шинэхэн орцыг <br />
                   <span className="text-emerald-400">Zity Chef & Odoo</span>-р шууд хүргэнэ
                 </h1>
-                <p className="text-xs sm:text-sm text-emerald-100/80 mb-5 max-w-lg leading-relaxed">
-                  Zity Chef-ийн хоолны жорын дагуу бэлтгэсэн орц багцууд болон өдөр тутмын хүнсний барааг 30 минутанд аваарай.
+                <p className="mb-5 max-w-lg text-xs leading-relaxed text-emerald-100/80 sm:text-sm">
+                  Zity Chef-ийн жорын дагуу бэлтгэсэн орц багцууд болон өдөр тутмын хүнсийг 30 минутад аваарай.
                 </p>
 
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={() => navigate('/recipe-kits')}
-                    className="flex items-center gap-2 rounded-2xl bg-emerald-500 px-5 py-3 text-xs font-extrabold text-slate-950 transition-all hover:bg-emerald-400 active:scale-95 shadow-md shadow-emerald-500/30"
+                    className="flex items-center gap-2 rounded-2xl bg-emerald-500 px-5 py-3 text-xs font-extrabold text-slate-950 shadow-md shadow-emerald-500/30 transition-all hover:bg-emerald-400 active:scale-95"
                   >
-                    <ChefHat className="h-4 w-4" /> Хоолны Багцууд үзэх
+                    <ChefHat className="h-4 w-4" /> Орц багцууд үзэх
                   </button>
                   <button
                     onClick={() => setIsOdooModalOpen(true)}
-                    className="flex items-center gap-1.5 rounded-2xl bg-white/10 px-4 py-3 text-xs font-bold text-white backdrop-blur-md hover:bg-white/20 transition-all"
+                    className="flex items-center gap-1.5 rounded-2xl bg-white/10 px-4 py-3 text-xs font-bold text-white backdrop-blur-md transition-all hover:bg-white/20"
                   >
-                    <Database className="h-3.5 w-3.5 text-emerald-300" /> Odoo Төлөв
+                    <Database className="h-3.5 w-3.5 text-emerald-300" /> Холболтын төлөв
                   </button>
                 </div>
               </div>
 
-              {/* Decorative Background Icons */}
-              <ChefHat className="absolute -right-6 -bottom-6 h-56 w-56 text-emerald-500/10 rotate-12 pointer-events-none hidden sm:block" />
+              <ChefHat className="pointer-events-none absolute -bottom-6 -right-6 hidden h-56 w-56 rotate-12 text-white/10 sm:block" />
             </div>
           </section>
         )}
 
-        {/* Featured Section: Zity Chef Recipe Bundles */}
-        {!isFiltering && (
+        {/* Онцлох орц багцууд */}
+        {!isFiltering && featuredKits.length > 0 && (
           <section className="mb-10">
             <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ChefHat className="h-5 w-5 text-emerald-500" />
-                <h2 className="text-base sm:text-lg font-extrabold text-text-main">Zity Chef-ийн Санал (Орц Багц)</h2>
-              </div>
+              <h2 className="flex items-center gap-2 text-base font-extrabold text-text-main sm:text-lg">
+                <ChefHat className="h-5 w-5 text-emerald-500" /> Zity Chef-ийн санал
+              </h2>
               <button
                 onClick={() => navigate('/recipe-kits')}
-                className="text-xs sm:text-sm font-bold text-emerald-600 flex items-center gap-1 hover:underline"
+                className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline sm:text-sm"
               >
                 Бүгдийг харах <ArrowRight className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {recipeKits.map((bundle) => (
-                <div
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {featuredKits.map((bundle) => (
+                <article
                   key={bundle.id}
-                  className="overflow-hidden rounded-3xl border border-border bg-surface shadow-xs hover:border-emerald-500/30 transition-all group flex flex-col justify-between"
+                  className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-border bg-surface shadow-xs transition-all hover:border-emerald-500/30"
                 >
                   <div>
                     <div className="relative h-44 w-full overflow-hidden bg-surface-hover">
                       <img
                         src={bundle.image}
                         alt={bundle.name}
+                        loading="lazy"
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
-                      <div className="absolute top-3 left-3 flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-xs">
+                      <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[10px] font-bold text-white">
                         <ChefHat className="h-3 w-3" /> {bundle.servings} хүний порц
-                      </div>
-                      <div className="absolute bottom-3 left-3 text-white pr-3">
-                        <h3 className="font-bold text-sm sm:text-base leading-tight text-white">{bundle.name}</h3>
-                        <p className="text-[11px] text-gray-300 line-clamp-1">{bundle.description}</p>
+                      </span>
+                      <div className="absolute bottom-3 left-3 right-3 text-white">
+                        <h3 className="text-sm font-bold leading-tight sm:text-base">{bundle.name}</h3>
+                        <p className="line-clamp-1 text-[11px] text-gray-300">{bundle.description}</p>
                       </div>
                     </div>
 
-                    <div className="p-4">
-                      <div className="mb-2 flex items-center gap-2 text-[11px] text-text-muted">
-                        <span className="flex items-center gap-1 font-medium bg-surface-hover px-2.5 py-1 rounded-lg border border-border">
-                          <Clock className="h-3.5 w-3.5 text-emerald-500" /> {bundle.prepTime || '25 мин'}
-                        </span>
-                        <span className="flex items-center gap-1 font-medium bg-surface-hover px-2.5 py-1 rounded-lg border border-border">
-                          <Layers className="h-3.5 w-3.5 text-amber-500" /> {bundle.productItems.length} орц
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2 p-4 pb-0 text-[11px] text-text-muted">
+                      <span className="flex items-center gap-1 rounded-lg border border-border bg-surface-hover px-2.5 py-1 font-medium">
+                        <Clock className="h-3.5 w-3.5 text-emerald-500" /> {bundle.prepTime}
+                      </span>
+                      <span className="flex items-center gap-1 rounded-lg border border-border bg-surface-hover px-2.5 py-1 font-medium">
+                        <Layers className="h-3.5 w-3.5 text-amber-500" /> {bundle.productItems.length} орц
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 pt-0">
+                  <div className="flex items-center justify-between gap-2 p-4">
                     <div>
                       {bundle.discountPrice ? (
                         <div className="flex items-baseline gap-1.5">
-                          <span className="font-extrabold text-lg text-emerald-600">
-                            {bundle.discountPrice.toLocaleString()}₮
+                          <span className="text-lg font-extrabold text-emerald-600">
+                            {formatMnt(bundle.discountPrice)}
                           </span>
-                          <span className="text-xs text-text-muted line-through">
-                            {bundle.price.toLocaleString()}₮
+                          <span className="text-xs text-text-subtle line-through">
+                            {formatMnt(bundle.price)}
                           </span>
                         </div>
                       ) : (
-                        <span className="font-extrabold text-lg text-text-main">
-                          {bundle.price.toLocaleString()}₮
-                        </span>
+                        <span className="text-lg font-extrabold text-text-main">{formatMnt(bundle.price)}</span>
                       )}
                     </div>
 
                     <button
                       onClick={() => handleAddBundle(bundle)}
-                      className="flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition-all hover:bg-emerald-700 active:scale-95 shadow-md shadow-emerald-600/20"
+                      className="zity-btn-primary shrink-0 px-4 py-2.5 text-xs"
                     >
                       <Plus className="h-4 w-4" /> Сагслах
                     </button>
                   </div>
-                </div>
+                </article>
               ))}
             </div>
           </section>
         )}
 
-        {/* Product Grid Header */}
+        {/* Барааны жагсаалт */}
         <section className="mb-10">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-extrabold text-text-main">
-              {searchQuery
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-base font-extrabold text-text-main sm:text-lg">
+              {searchQuery.trim()
                 ? `Хайлтын үр дүн (${filteredProducts.length})`
-                : selectedCategory
-                ? `${selectedCategory} (${filteredProducts.length})`
-                : 'Odoo & Zity Chef Дэлгүүрийн Бараанууд'}
+                : selectedCategoryName
+                ? `${selectedCategoryName} (${filteredProducts.length})`
+                : 'Дэлгүүрийн бараанууд'}
             </h2>
 
-            <div className="flex items-center gap-1 text-xs font-bold text-emerald-600">
-              <ShieldCheck className="h-4 w-4" /> Live ERP Stock
-            </div>
+            <span
+              className={`flex shrink-0 items-center gap-1 text-xs font-bold ${
+                isChefLive ? 'text-emerald-600' : 'text-amber-500'
+              }`}
+              title={connection.message}
+            >
+              {isChefLive ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+              {isChefLive ? 'Live нөөц' : 'Локал'}
+            </span>
           </div>
 
-          {/* Product Cards Grid (Responsive Grid columns up to xl:6) */}
-          {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+          {isLoadingProducts && products.length === 0 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {Array.from({ length: 12 }).map((_, index) => (
+                <div key={index} className="overflow-hidden rounded-3xl border border-border bg-surface">
+                  <Skeleton className="aspect-square w-full" />
+                  <div className="space-y-2 p-3.5">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredProducts.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {filteredProducts.map((product) => (
-                <ProductCard key={product.id} product={product} onClick={handleProductClick} />
+                <ProductCard key={product.id} product={product} onClick={setSelectedProduct} />
               ))}
             </div>
           ) : (
-            <div className="py-16 text-center text-text-muted bg-surface rounded-3xl border border-border p-6">
-              <p className="font-medium text-sm">
-                {searchQuery ? `"${searchQuery}" хайлтад тохирох бараа олдсонгүй.` : 'Энэ ангилалд бараа байхгүй байна.'}
+            <div className="rounded-3xl border border-border bg-surface p-10 text-center">
+              <SearchX className="mx-auto mb-3 h-8 w-8 text-text-subtle" />
+              <p className="text-sm font-bold text-text-main">
+                {searchQuery.trim()
+                  ? `"${searchQuery}" хайлтад тохирох бараа олдсонгүй.`
+                  : 'Энэ ангилалд бараа байхгүй байна.'}
               </p>
+              <p className="mt-1 text-xs text-text-muted">Өөр түлхүүр үг эсвэл ангилал сонгоод үзнэ үү.</p>
             </div>
           )}
         </section>
-      </main>
 
-      {/* Product Detail Bottom Sheet */}
-      <BottomSheet isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)}>
+        {/* Барааны дэлгэрэнгүй */}
+        <BottomSheet isOpen={Boolean(selectedProduct)} onClose={() => setSelectedProduct(null)}>
         {selectedProduct && (
-          <div className="flex flex-col max-w-lg mx-auto">
-            <div className="relative mb-4 aspect-square w-full overflow-hidden rounded-3xl bg-surface-hover border border-border">
-              <img src={selectedProduct.image} alt={selectedProduct.name} className="h-full w-full object-cover" />
+          <div className="mx-auto flex max-w-lg flex-col">
+            <div className="relative mb-4 aspect-square w-full overflow-hidden rounded-3xl border border-border bg-surface-hover">
+              <img
+                src={selectedProduct.image}
+                alt={selectedProduct.name}
+                className="h-full w-full object-cover"
+              />
               {selectedProduct.sku && (
-                <div className="absolute top-3 left-3 rounded-full bg-black/60 px-3 py-1 text-[11px] font-mono font-bold text-white backdrop-blur-md">
+                <span className="absolute left-3 top-3 rounded-full bg-black/60 px-3 py-1 font-mono text-[11px] font-bold text-white backdrop-blur-md">
                   SKU: {selectedProduct.sku}
-                </div>
+                </span>
               )}
             </div>
 
-            <div className="mb-2 flex items-start justify-between">
-              <div>
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div className="min-w-0">
                 <h2 className="text-xl font-extrabold text-text-main">{selectedProduct.name}</h2>
-                <p className="text-xs text-emerald-600 font-bold">{selectedProduct.category}</p>
+                <p className="text-xs font-bold text-emerald-600">{selectedProduct.category}</p>
               </div>
-              <div className="text-right">
+              <div className="shrink-0 text-right">
                 {selectedProduct.discountPrice ? (
                   <>
-                    <div className="text-xs text-text-muted line-through">
-                      {selectedProduct.price.toLocaleString()}₮
+                    <div className="text-xs text-text-subtle line-through">
+                      {formatMnt(selectedProduct.price)}
                     </div>
                     <div className="text-xl font-extrabold text-emerald-600">
-                      {selectedProduct.discountPrice.toLocaleString()}₮
+                      {formatMnt(selectedProduct.discountPrice)}
                     </div>
                   </>
                 ) : (
                   <div className="text-xl font-extrabold text-text-main">
-                    {selectedProduct.price.toLocaleString()}₮
+                    {formatMnt(selectedProduct.price)}
                   </div>
                 )}
               </div>
             </div>
 
-            <p className="mb-4 text-xs text-text-muted leading-relaxed">{selectedProduct.description}</p>
+            <p className="mb-4 text-xs leading-relaxed text-text-muted">{selectedProduct.description}</p>
 
             <div className="mb-6 grid grid-cols-2 gap-2 text-xs">
               {selectedProduct.expiration && (
-                <div className="col-span-2 flex items-start gap-2 rounded-2xl bg-surface-hover p-3 border border-border">
+                <div className="col-span-2 flex items-start gap-2 rounded-2xl border border-border bg-surface-hover p-3">
                   <Clock className="mt-0.5 h-4 w-4 text-emerald-500" />
                   <div>
-                    <div className="text-[10px] font-bold text-text-muted">Хугацаа & Хадгалалт</div>
+                    <div className="text-[10px] font-bold text-text-muted">Хугацаа & хадгалалт</div>
                     <div className="text-xs font-medium text-text-main">{selectedProduct.expiration}</div>
                   </div>
                 </div>
               )}
               {selectedProduct.calories && (
-                <div className="flex items-start gap-2 rounded-2xl bg-surface-hover p-3 border border-border">
+                <div className="flex items-start gap-2 rounded-2xl border border-border bg-surface-hover p-3">
                   <Flame className="mt-0.5 h-4 w-4 text-amber-500" />
                   <div>
                     <div className="text-[10px] font-bold text-text-muted">Илчлэг</div>
@@ -291,37 +339,38 @@ export function HomeScreen() {
                   </div>
                 </div>
               )}
-              {selectedProduct.stock !== undefined && (
-                <div className="flex items-start gap-2 rounded-2xl bg-surface-hover p-3 border border-border">
-                  <Database className="mt-0.5 h-4 w-4 text-emerald-500" />
-                  <div>
-                    <div className="text-[10px] font-bold text-text-muted">Odoo / Store Нөөц</div>
-                    <div className="text-xs font-semibold text-emerald-600">
-                      {selectedProduct.stock} {selectedProduct.unit} бэлэн
-                    </div>
+              <div className="flex items-start gap-2 rounded-2xl border border-border bg-surface-hover p-3">
+                <Database className="mt-0.5 h-4 w-4 text-emerald-500" />
+                <div>
+                  <div className="text-[10px] font-bold text-text-muted">Бэлэн нөөц</div>
+                  <div
+                    className={`text-xs font-semibold ${
+                      selectedProduct.stock > 0 ? 'text-emerald-600' : 'text-red-500'
+                    }`}
+                  >
+                    {selectedProduct.stock > 0
+                      ? `${selectedProduct.stock} ${selectedProduct.unit} бэлэн`
+                      : 'Нөөц дууссан'}
                   </div>
                 </div>
-              )}
+              </div>
             </div>
 
             <button
-              onClick={() => {
-                addItem(selectedProduct);
-                setSelectedProduct(null);
-              }}
-              className="w-full rounded-2xl bg-emerald-600 py-4 text-center font-bold text-white transition-all hover:bg-emerald-700 active:scale-98 shadow-lg shadow-emerald-600/20"
+              onClick={handleAddSelectedProduct}
+              disabled={selectedProduct.stock <= 0}
+              className="zity-btn-primary w-full py-4 text-sm"
             >
-              Сагсанд Нэмэх ({(selectedProduct.discountPrice || selectedProduct.price).toLocaleString()}₮)
+              {selectedProduct.stock <= 0
+                ? 'Нөөц дууссан'
+                : `Сагсанд нэмэх (${formatMnt(selectedProduct.discountPrice ?? selectedProduct.price)})`}
             </button>
           </div>
         )}
-      </BottomSheet>
+        </BottomSheet>
 
-      {/* Odoo Sync Status Modal */}
-      <OdooSyncModal isOpen={isOdooModalOpen} onClose={() => setIsOdooModalOpen(false)} />
-
-      {/* Bottom Navigation */}
-      <BottomNav onOpenOdooModal={() => setIsOdooModalOpen(false)} />
-    </div>
+        <OdooSyncModal isOpen={isOdooModalOpen} onClose={() => setIsOdooModalOpen(false)} />
+      </>
+    </AppShell>
   );
 }

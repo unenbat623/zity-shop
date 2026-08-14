@@ -1,339 +1,397 @@
-import React, { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
-  MapPin,
-  CreditCard,
-  QrCode,
-  Smartphone,
+  AlertTriangle,
   Banknote,
   CheckCircle2,
+  Clock,
+  CreditCard,
   Database,
-  Truck,
-  ShieldCheck,
-  Building
+  Loader2,
+  MapPin,
+  QrCode,
+  Smartphone,
 } from 'lucide-react';
+
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useOrderStore } from '../store/useOrderStore';
-import { PaymentMethod } from '../types';
+import { useToastStore } from '../store/useToastStore';
+import { AppShell } from '../components/AppShell';
 import { PaymentModal } from '../components/PaymentModal';
+import { DeliveryAddress, PaymentMethod } from '../types';
+import { formatMnt } from '../lib/format';
+
+const PAYMENT_OPTIONS: { id: PaymentMethod; label: string; icon: typeof QrCode; desc: string }[] = [
+  { id: 'qpay', label: 'QPay QR', icon: QrCode, desc: 'Бүх банкны аппаар' },
+  { id: 'socialpay', label: 'SocialPay', icon: Smartphone, desc: 'Голомт банкны апп' },
+  { id: 'monpay', label: 'MonPay', icon: Smartphone, desc: 'Мобиком түрийвч' },
+  { id: 'card', label: 'Банкны карт', icon: CreditCard, desc: 'Visa, MasterCard' },
+  { id: 'cod', label: 'Хүргэлтээр бэлнээр', icon: Banknote, desc: 'Хүлээн авахдаа төлнө' },
+];
+
+/** Онлайн төлбөрийн цонх нээх шаардлагатай хэлбэрүүд */
+const ONLINE_METHODS: PaymentMethod[] = ['qpay', 'socialpay', 'monpay'];
 
 export function CheckoutScreen() {
   const navigate = useNavigate();
+  const showToast = useToastStore((state) => state.show);
+
   const {
     items,
     deliveryMode,
     pickupTime,
-    selectedAddress,
+    couponCode,
     getSubtotal,
     getDiscountAmount,
     getDeliveryFee,
     getTotalPrice,
+    getCheckoutIssue,
     clearCart,
   } = useCartStore();
 
-  const { user } = useAuthStore();
-  const { createOrder } = useOrderStore();
+  const account = useAuthStore((state) => state.account);
+  const addresses = useAuthStore((state) => state.getAddresses());
+  const selectedAddressIndex = useAuthStore((state) => state.getSelectedAddressIndex());
+  const setSelectedAddressIndex = useAuthStore((state) => state.setSelectedAddressIndex);
+
+  const { createOrder, isCreating } = useOrderStore();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('qpay');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Address State
-  const [district, setDistrict] = useState(selectedAddress?.district || 'Сүхбаатар дүүрэг');
-  const [khoroo, setKhoroo] = useState(selectedAddress?.khoroo || '1-р хороо');
-  const [streetBuilding, setStreetBuilding] = useState(selectedAddress?.streetBuilding || 'Zity Center, 4-р давхар');
-  const [entranceAppt, setEntranceAppt] = useState(selectedAddress?.entranceAppt || '1-р орц, 402 тоот');
-  const [phone, setPhone] = useState(selectedAddress?.phone || '99112233');
-  const [notes, setNotes] = useState(selectedAddress?.notes || 'Үүдэнд утасдаж мэдэгдэнэ үү');
+  const totalPrice = getTotalPrice();
+  const checkoutIssue = getCheckoutIssue();
+  const selectedAddress = addresses[selectedAddressIndex] ?? null;
+
+  /** Очиж авах үед хаяг шаардлагагүй — салбарын хаягийг ашиглана */
+  const pickupAddress = useMemo<DeliveryAddress>(
+    () => ({
+      id: 'pickup-store',
+      label: 'Zity Delguur төв салбар',
+      district: 'Сүхбаатар дүүрэг',
+      khoroo: '1-р хороо',
+      streetBuilding: 'Zity Center, Сөүлийн гудамж',
+      entranceAppt: 'Үндсэн орц',
+      phone: account?.phone || '',
+      notes: 'Очиж авах захиалга',
+    }),
+    [account?.phone]
+  );
+
+  // Сагс хоосон бол буцаана — render дундуур биш, effect дотор
+  useEffect(() => {
+    if (items.length === 0 && !isCreating) {
+      navigate('/cart', { replace: true });
+    }
+  }, [items.length, isCreating, navigate]);
+
+  if (items.length === 0) return null;
+
+  const requiresAddress = deliveryMode === 'delivery';
+  const missingAddress = requiresAddress && !selectedAddress;
+  const blockingIssue = checkoutIssue || (missingAddress ? 'Хүргэлтийн хаягаа сонгоно уу.' : null);
 
   const handlePlaceOrderClick = () => {
-    if (paymentMethod === 'qpay' || paymentMethod === 'socialpay' || paymentMethod === 'monpay') {
+    if (blockingIssue) {
+      showToast(blockingIssue, 'warning');
+      return;
+    }
+
+    if (ONLINE_METHODS.includes(paymentMethod)) {
       setIsPaymentModalOpen(true);
     } else {
-      processOrderCreation();
+      void processOrder();
     }
   };
 
-  const processOrderCreation = async () => {
-    setIsSubmitting(true);
-    const finalAddress = {
-      district,
-      khoroo,
-      streetBuilding,
-      entranceAppt,
-      phone,
-      notes,
-    };
+  const processOrder = async () => {
+    const address = requiresAddress ? selectedAddress : pickupAddress;
+    if (!address) {
+      showToast('Хүргэлтийн хаяг олдсонгүй.', 'error');
+      return;
+    }
 
-    const newOrder = await createOrder(
-      items,
-      deliveryMode,
-      finalAddress,
-      pickupTime,
-      paymentMethod,
-      getSubtotal(),
-      getDiscountAmount(),
-      getDeliveryFee(),
-      getTotalPrice()
-    );
-
-    clearCart();
-    setIsSubmitting(false);
     setIsPaymentModalOpen(false);
 
-    navigate('/orders');
+    const order = await createOrder({
+      items,
+      deliveryMode,
+      address,
+      pickupTime,
+      paymentMethod,
+      subtotal: getSubtotal(),
+      discountAmount: getDiscountAmount(),
+      deliveryFee: getDeliveryFee(),
+      totalAmount: totalPrice,
+      couponCode: couponCode || undefined,
+    });
+
+    clearCart();
+
+    if (order.odooSync.status === 'failed' || order.chefSync.status === 'failed') {
+      showToast('Захиалга үүслээ. Зарим синк амжилтгүй — дэлгэрэнгүйгээс дахин илгээж болно.', 'warning');
+    } else {
+      showToast(`${order.id} захиалга амжилттай баталгаажлаа.`, 'success');
+    }
+
+    navigate(`/orders/${order.id}`, { replace: true });
   };
 
-  if (items.length === 0) {
-    navigate('/');
-    return null;
-  }
-
-  const paymentOptions: { id: PaymentMethod; label: string; icon: any; desc: string }[] = [
-    { id: 'qpay', label: 'QPay QR', icon: QrCode, desc: 'Бүх банкны апп-аар' },
-    { id: 'socialpay', label: 'SocialPay', icon: Smartphone, desc: 'Голомт банкны апп' },
-    { id: 'monpay', label: 'MonPay', icon: Smartphone, desc: 'Мобиком түрийвч' },
-    { id: 'card', label: 'Банкны Карт', icon: CreditCard, desc: 'Visa, MasterCard, ₮' },
-    { id: 'cod', label: 'Хүргэлтээр / Бэлнээр', icon: Banknote, desc: 'Хүлээн авахдаа' },
-  ];
-
   return (
-    <div className="min-h-screen bg-background pb-32 text-text-main">
-      {/* Header */}
-      <header className="sticky top-0 z-30 flex items-center justify-between bg-surface px-4 py-3.5 border-b border-border shadow-xs">
-        <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
-          <div className="flex items-center">
-            <button onClick={() => navigate(-1)} className="p-1.5 -ml-1 text-text-muted hover:text-text-main">
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <h1 className="ml-2 text-base font-extrabold text-text-main">Захиалга Баталгаажуулах</h1>
+    <AppShell
+      showSearch={false}
+      title="Захиалга баталгаажуулах"
+      maxWidth="lg"
+      backTo="/cart"
+      // Төлбөрийн урсгалд анхаарал сарниулахгүйн тулд доод цэсийг нууна
+      hideBottomNav
+      headerRight={
+        <span className="hidden items-center gap-1 text-xs font-bold text-emerald-600 sm:flex">
+          <Database className="h-3.5 w-3.5" /> Odoo sale.order
+        </span>
+      }
+      stickyFooter={
+        <div className="flex items-center justify-between gap-4 md:hidden">
+          <div>
+            <span className="block text-[10px] font-bold text-text-muted">Нийт төлөх</span>
+            <span className="text-xl font-extrabold text-emerald-600">{formatMnt(totalPrice)}</span>
           </div>
-          <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
-            <Database className="h-3.5 w-3.5" /> Odoo Sales Integration
-          </span>
+          <button
+            onClick={handlePlaceOrderClick}
+            disabled={isCreating || Boolean(blockingIssue)}
+            className="zity-btn-primary flex-1 py-3.5 text-xs"
+          >
+            {isCreating ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>
+                <CheckCircle2 className="h-4 w-4" /> Баталгаажуулах
+              </>
+            )}
+          </button>
         </div>
-      </header>
+      }
+    >
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
+          <div className="space-y-4 md:col-span-7">
+            {/* Хаяг */}
+            {requiresAddress ? (
+              <section className="zity-card space-y-3 p-4 sm:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="flex items-center gap-2 text-xs font-extrabold text-text-main sm:text-sm">
+                    <MapPin className="h-4 w-4 text-emerald-500" /> Хүргэлтийн хаяг
+                  </h2>
+                  <button
+                    onClick={() => navigate('/profile')}
+                    className="text-[11px] font-bold text-emerald-600 hover:underline"
+                  >
+                    Хаяг удирдах
+                  </button>
+                </div>
 
-      <main className="p-4 sm:p-6 max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          {/* Left Column: Address & Payment Methods */}
-          <div className="md:col-span-7 space-y-4">
-            {/* Address Form (If Delivery Mode) */}
-            {deliveryMode === 'delivery' && (
-              <div className="rounded-3xl bg-surface p-4 sm:p-5 border border-border shadow-xs space-y-3">
-                <h2 className="text-xs sm:text-sm font-extrabold text-text-main flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-emerald-500" /> Хүргэлтийн Хаяг
-                </h2>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <label className="text-[10px] font-bold text-text-muted block mb-1">Дүүрэг</label>
-                    <select
-                      value={district}
-                      onChange={(e) => setDistrict(e.target.value)}
-                      className="w-full rounded-xl border border-border bg-surface-hover p-2.5 text-xs font-semibold outline-none focus:border-emerald-500"
+                {addresses.length === 0 ? (
+                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-center">
+                    <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-amber-500" />
+                    <p className="mb-3 text-xs font-semibold text-amber-600">
+                      Хүргэлтийн хаяг хадгалаагүй байна.
+                    </p>
+                    <button
+                      onClick={() => navigate('/profile')}
+                      className="zity-btn-primary px-4 py-2 text-xs"
                     >
-                      <option value="Сүхбаатар дүүрэг">Сүхбаатар дүүрэг</option>
-                      <option value="Хан-Уул дүүрэг">Хан-Уул дүүрэг</option>
-                      <option value="Баянгол дүүрэг">Баянгол дүүрэг</option>
-                      <option value="Баянзүрх дүүрэг">Баянзүрх дүүрэг</option>
-                      <option value="Чингэлтэй дүүрэг">Чингэлтэй дүүрэг</option>
-                      <option value="Сонгинохайрхан дүүрэг">Сонгинохайрхан дүүрэг</option>
-                    </select>
+                      Хаяг нэмэх
+                    </button>
                   </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-text-muted block mb-1">Хороо</label>
-                    <input
-                      type="text"
-                      value={khoroo}
-                      onChange={(e) => setKhoroo(e.target.value)}
-                      className="w-full rounded-xl border border-border bg-surface-hover p-2.5 text-xs font-semibold outline-none focus:border-emerald-500"
-                    />
+                ) : (
+                  <div className="space-y-2">
+                    {addresses.map((address, index) => {
+                      const isSelected = index === selectedAddressIndex;
+                      return (
+                        <button
+                          key={address.id}
+                          onClick={() => setSelectedAddressIndex(index)}
+                          className={`flex w-full items-start gap-3 rounded-2xl border p-3 text-left transition-all ${
+                            isSelected
+                              ? 'border-emerald-500 bg-emerald-500/10'
+                              : 'border-border bg-surface-hover hover:border-emerald-500/30'
+                          }`}
+                          aria-pressed={isSelected}
+                        >
+                          <span
+                            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                              isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-text-subtle'
+                            }`}
+                          >
+                            {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-bold text-text-main">
+                              {address.district}, {address.khoroo}
+                            </span>
+                            <span className="block text-[11px] text-text-muted">
+                              {address.streetBuilding}
+                              {address.entranceAppt ? `, ${address.entranceAppt}` : ''}
+                            </span>
+                            <span className="block font-mono text-[10px] text-text-muted">{address.phone}</span>
+                            {address.notes && (
+                              <span className="block text-[10px] text-emerald-600">📝 {address.notes}</span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-text-muted block mb-1">Байр, Гудамжны нэр</label>
-                  <input
-                    type="text"
-                    value={streetBuilding}
-                    onChange={(e) => setStreetBuilding(e.target.value)}
-                    className="w-full rounded-xl border border-border bg-surface-hover p-2.5 text-xs font-semibold outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <label className="text-[10px] font-bold text-text-muted block mb-1">Орц, Тоот</label>
-                    <input
-                      type="text"
-                      value={entranceAppt}
-                      onChange={(e) => setEntranceAppt(e.target.value)}
-                      className="w-full rounded-xl border border-border bg-surface-hover p-2.5 text-xs font-semibold outline-none focus:border-emerald-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-text-muted block mb-1">Холбогдох Утас</label>
-                    <input
-                      type="text"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full rounded-xl border border-border bg-surface-hover p-2.5 text-xs font-semibold outline-none focus:border-emerald-500 font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-text-muted block mb-1">Хаягийн нэмэлт тэмдэглэл</label>
-                  <input
-                    type="text"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Жишээ: 1-р орц, код: 1234"
-                    className="w-full rounded-xl border border-border bg-surface-hover p-2.5 text-xs font-medium outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
+                )}
+              </section>
+            ) : (
+              <section className="zity-card p-4 sm:p-5">
+                <h2 className="mb-3 flex items-center gap-2 text-xs font-extrabold text-text-main sm:text-sm">
+                  <MapPin className="h-4 w-4 text-amber-500" /> Очиж авах
+                </h2>
+                <p className="text-xs font-bold text-text-main">{pickupAddress.label}</p>
+                <p className="text-[11px] text-text-muted">{pickupAddress.streetBuilding}</p>
+                <p className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
+                  <Clock className="h-3.5 w-3.5" /> Очих цаг: {pickupTime || 'сонгоогүй'}
+                </p>
+              </section>
             )}
 
-            {/* Payment Methods */}
-            <div className="rounded-3xl bg-surface p-4 sm:p-5 border border-border shadow-xs space-y-3">
-              <h2 className="text-xs sm:text-sm font-extrabold text-text-main flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-emerald-500" /> Төлбөрийн Хэлбэр Сонгох
+            {/* Төлбөрийн хэлбэр */}
+            <section className="zity-card space-y-3 p-4 sm:p-5">
+              <h2 className="flex items-center gap-2 text-xs font-extrabold text-text-main sm:text-sm">
+                <CreditCard className="h-4 w-4 text-emerald-500" /> Төлбөрийн хэлбэр
               </h2>
 
               <div className="space-y-2">
-                {paymentOptions.map((opt) => {
-                  const Icon = opt.icon;
-                  const isSelected = paymentMethod === opt.id;
+                {PAYMENT_OPTIONS.map((option) => {
+                  const Icon = option.icon;
+                  const isSelected = paymentMethod === option.id;
 
                   return (
                     <button
-                      key={opt.id}
-                      onClick={() => setPaymentMethod(opt.id)}
-                      className={`flex w-full items-center justify-between p-3.5 rounded-2xl border text-xs transition-all ${
+                      key={option.id}
+                      onClick={() => setPaymentMethod(option.id)}
+                      className={`flex w-full items-center justify-between rounded-2xl border p-3.5 text-xs transition-all ${
                         isSelected
-                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 font-bold shadow-xs'
-                          : 'bg-surface border-border text-text-main hover:bg-surface-hover font-medium'
+                          ? 'border-emerald-500 bg-emerald-500/10 font-bold text-emerald-600'
+                          : 'border-border bg-surface font-medium text-text-main hover:bg-surface-hover'
                       }`}
+                      aria-pressed={isSelected}
                     >
-                      <div className="flex items-center gap-3">
-                        <div
+                      <span className="flex items-center gap-3">
+                        <span
                           className={`flex h-10 w-10 items-center justify-center rounded-xl ${
                             isSelected ? 'bg-emerald-600 text-white' : 'bg-surface-hover text-text-muted'
                           }`}
                         >
                           <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-bold text-xs sm:text-sm">{opt.label}</div>
-                          <div className="text-[11px] text-text-muted">{opt.desc}</div>
-                        </div>
-                      </div>
+                        </span>
+                        <span className="text-left">
+                          <span className="block text-xs font-bold sm:text-sm">{option.label}</span>
+                          <span className="block text-[11px] text-text-muted">{option.desc}</span>
+                        </span>
+                      </span>
 
-                      <div
-                        className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
-                          isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-text-muted'
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                          isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-text-subtle'
                         }`}
                       >
-                        {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-                      </div>
+                        {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                      </span>
                     </button>
                   );
                 })}
               </div>
-            </div>
+
+              {paymentMethod === 'cod' && (
+                <p className="rounded-xl border border-border bg-surface-hover p-2.5 text-[11px] text-text-muted">
+                  Бэлнээр төлөх захиалга хүргэгдэх үед төлөгдсөнд тооцогдоно.
+                </p>
+              )}
+            </section>
           </div>
 
-          {/* Right Column: Order Summary & Place Order Button */}
-          <div className="md:col-span-5 space-y-4">
-            {/* Total Price Summary Box */}
-            <div className="rounded-3xl bg-surface p-5 border border-border shadow-xs space-y-3 text-xs sm:text-sm">
-              <h3 className="font-extrabold text-sm text-text-main border-b border-border pb-2">Захиалгын Дүн</h3>
+          {/* Дүн */}
+          <div className="space-y-4 md:col-span-5">
+            <section className="zity-card space-y-3 p-5 text-xs sm:text-sm">
+              <h2 className="border-b border-border pb-2 text-sm font-extrabold text-text-main">
+                Захиалгын дүн
+              </h2>
 
-              <div className="flex justify-between text-text-muted">
-                <span>Бараануудын дүн ({items.length})</span>
-                <span className="font-bold text-text-main">{getSubtotal().toLocaleString()}₮</span>
+              <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                {items.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="min-w-0 truncate text-text-muted">
+                      {item.name} <span className="font-bold text-text-main">× {item.quantity}</span>
+                    </span>
+                    <span className="shrink-0 font-bold text-text-main">
+                      {formatMnt((item.discountPrice ?? item.price) * item.quantity)}
+                    </span>
+                  </div>
+                ))}
               </div>
+
+              <div className="flex justify-between border-t border-border pt-3 text-text-muted">
+                <span>Бараануудын дүн ({items.length})</span>
+                <span className="font-bold text-text-main">{formatMnt(getSubtotal())}</span>
+              </div>
+
+              {getDiscountAmount() > 0 && (
+                <div className="flex justify-between font-bold text-emerald-600">
+                  <span>Хямдрал{couponCode ? ` (${couponCode})` : ''}</span>
+                  <span>-{formatMnt(getDiscountAmount())}</span>
+                </div>
+              )}
 
               <div className="flex justify-between text-text-muted">
                 <span>Хүргэлтийн төлбөр</span>
                 <span>
                   {getDeliveryFee() === 0 ? (
-                    <span className="text-emerald-600 font-bold">ҮНЭГҮЙ</span>
+                    <span className="font-bold text-emerald-600">ҮНЭГҮЙ</span>
                   ) : (
-                    `${getDeliveryFee().toLocaleString()}₮`
+                    formatMnt(getDeliveryFee())
                   )}
                 </span>
               </div>
 
-              {getDiscountAmount() > 0 && (
-                <div className="flex justify-between text-emerald-600 font-bold">
-                  <span>Хямдралын хөнгөлөлт</span>
-                  <span>-{getDiscountAmount().toLocaleString()}₮</span>
-                </div>
-              )}
-
-              <div className="border-t border-border pt-3 flex justify-between text-base sm:text-lg font-extrabold text-text-main">
-                <span>Нийт Төлөх Дүн</span>
-                <span className="text-xl sm:text-2xl text-emerald-600">{getTotalPrice().toLocaleString()}₮</span>
+              <div className="flex justify-between border-t border-border pt-3 text-base font-extrabold text-text-main sm:text-lg">
+                <span>Нийт төлөх</span>
+                <span className="text-xl text-emerald-600 sm:text-2xl">{formatMnt(totalPrice)}</span>
               </div>
+
+              {blockingIssue && (
+                <p className="flex items-start gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-2.5 text-[11px] font-semibold text-amber-600">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {blockingIssue}
+                </p>
+              )}
 
               <button
                 onClick={handlePlaceOrderClick}
-                disabled={isSubmitting}
-                className="hidden md:flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-4 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 active:scale-98 disabled:opacity-50 mt-4"
+                disabled={isCreating || Boolean(blockingIssue)}
+                className="zity-btn-primary mt-2 hidden w-full py-4 text-sm md:flex"
               >
-                {isSubmitting ? (
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                {isCreating ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    <CheckCircle2 className="h-5 w-5" /> Odoo ERP-д Захиалга Илгээх
+                    <CheckCircle2 className="h-5 w-5" /> Захиалга баталгаажуулах
                   </>
                 )}
               </button>
-            </div>
+            </section>
           </div>
-        </div>
-      </main>
-
-      {/* Sticky Bottom Action (Mobile) */}
-      <div className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-surface p-4 border-t border-border shadow-2xl pb-safe">
-        <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
-          <div>
-            <span className="text-[10px] text-text-muted font-bold block">Нийт Төлөх</span>
-            <span className="text-xl font-extrabold text-emerald-600">{getTotalPrice().toLocaleString()}₮</span>
-          </div>
-
-          <button
-            onClick={handlePlaceOrderClick}
-            disabled={isSubmitting}
-            className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-4 text-xs font-extrabold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 active:scale-98 disabled:opacity-50"
-          >
-            {isSubmitting ? (
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4" /> Odoo ERP-д Захиалга Илгээх
-              </>
-            )}
-          </button>
-        </div>
       </div>
 
-      {/* QPay Payment Modal */}
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
-        onPaymentSuccess={processOrderCreation}
-        amount={getTotalPrice()}
+        onPaymentSuccess={() => void processOrder()}
+        amount={totalPrice}
         paymentMethod={paymentMethod}
-        orderRef="SO-2026-TEMP"
       />
-    </div>
+    </AppShell>
   );
 }

@@ -18,6 +18,8 @@ export interface Product {
   isOrganic?: boolean;
   isMongolian?: boolean;
   tags?: string[];
+  /** Zity Chef backend-ээс live татагдсан эсэх */
+  isLiveSynced?: boolean;
 }
 
 export interface Category {
@@ -44,7 +46,8 @@ export interface FridgeItem {
   unit: string;
   expiryDays: number;
   lastSyncedAt: string;
-  source: 'Zity Chef' | 'Odoo stock';
+  source: 'Zity Chef' | 'Odoo stock' | 'Zity Delguur';
+  emoji?: string;
 }
 
 export interface RecipeBundle {
@@ -60,6 +63,7 @@ export interface RecipeBundle {
   image: string;
   productItems: RecipeIngredientItem[];
   instructions?: string[];
+  isLiveSynced?: boolean;
 }
 
 export interface CartItem extends Product {
@@ -69,6 +73,8 @@ export interface CartItem extends Product {
 export type DeliveryMode = 'delivery' | 'pickup';
 
 export interface DeliveryAddress {
+  id: string;
+  label?: string;
   district: string;
   khoroo: string;
   streetBuilding: string;
@@ -79,24 +85,37 @@ export interface DeliveryAddress {
 
 export type PaymentMethod = 'qpay' | 'socialpay' | 'monpay' | 'card' | 'cod';
 
+export type PaymentStatus = 'unpaid' | 'paid' | 'refunded';
+
 export type OrderStatus = 'pending' | 'odoo_synced' | 'packing' | 'shipping' | 'delivered' | 'cancelled';
+
+/** Гадаад систем рүү илгээсэн синхрончлолын үр дүн */
+export interface IntegrationSyncState {
+  status: 'pending' | 'success' | 'failed';
+  message?: string;
+  syncedAt?: string;
+}
 
 export interface Order {
   id: string;
   odooOrderRef: string;
   createdAt: string;
+  userId: string | null;
   items: CartItem[];
   deliveryMode: DeliveryMode;
   address: DeliveryAddress;
   pickupTime?: string;
   paymentMethod: PaymentMethod;
-  paymentStatus: 'unpaid' | 'paid';
+  paymentStatus: PaymentStatus;
   subtotal: number;
   discountAmount: number;
   deliveryFee: number;
   totalAmount: number;
+  couponCode?: string;
   status: OrderStatus;
   estimatedDeliveryTime?: string;
+  odooSync: IntegrationSyncState;
+  chefSync: IntegrationSyncState;
 }
 
 export interface OdooConfig {
@@ -118,11 +137,44 @@ export interface OdooSyncLog {
   details?: string;
 }
 
+/** Supabase-аас ирсэн нэвтрэлтийн бүртгэл */
+export interface AuthAccount {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+  avatarUrl: string;
+  provider: 'google' | 'email';
+  isEmailConfirmed: boolean;
+  createdAt: string;
+}
+
+/** Тухайн хэрэглэгчийн апп доторх профайл (хаяг, оноо) */
 export interface UserProfile {
   name: string;
   email: string;
   phone: string;
+  avatarUrl: string;
   zityPoints: number;
   addresses: DeliveryAddress[];
   isZityChefConnected: boolean;
+}
+
+/** Admin dashboard-д харагдах нэгдсэн хэрэглэгчийн мөр */
+export interface AdminUserRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  source: 'Zity Chef' | 'Zity Delguur' | 'Both';
+  savedItems: number;
+  orders: number;
+  lastSeen: string;
+}
+
+/** Zity Chef backend холболтын төлөв */
+export interface ChefConnectionState {
+  status: 'unknown' | 'checking' | 'live' | 'offline';
+  lastCheckedAt: string | null;
+  message: string;
 }

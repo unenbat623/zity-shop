@@ -1,62 +1,70 @@
-import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, ChefHat, PackageCheck, Database, User } from 'lucide-react';
-import { useOrderStore } from '../store/useOrderStore';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { User } from 'lucide-react';
 
-export function BottomNav({ onOpenOdooModal }: { onOpenOdooModal?: () => void }) {
+import { isNavItemActive, NAV_ITEMS } from './navigation';
+import { useOrderStore } from '../store/useOrderStore';
+import { useAuthStore } from '../store/useAuthStore';
+
+/**
+ * Мобайл доод навигаци (< lg). Desktop дээр sidebar нь үүнийг орлоно.
+ * Цэсийн жагсаалт нь `navigation.ts`-ээс ирдэг тул sidebar-тай хэзээ ч зөрөхгүй.
+ */
+export function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { orders } = useOrderStore();
+
+  const account = useAuthStore((state) => state.account);
+  const orders = useOrderStore((state) => state.orders);
 
   const activeOrdersCount = orders.filter(
-    (o) => o.status !== 'delivered' && o.status !== 'cancelled'
+    (order) =>
+      order.userId === (account?.id ?? null) &&
+      order.status !== 'delivered' &&
+      order.status !== 'cancelled'
   ).length;
 
-  const navItems = [
-    { path: '/', label: 'Дэлгүүр', icon: Home },
-    { path: '/recipe-kits', label: 'Chef Орц', icon: ChefHat },
-    { path: '/zity-fridge', label: 'Fridge', icon: PackageCheck },
-    { path: '/orders', label: 'Захиалга', icon: PackageCheck, badge: activeOrdersCount > 0 ? activeOrdersCount : undefined },
-    { path: '/odoo-admin', label: 'Odoo ERP', icon: Database },
-    { path: '/profile', label: 'Профайл', icon: User },
+  // Доод цэсэнд 4 үндсэн зам + профайл/нэвтрэх = 5 таб
+  const items = [
+    ...NAV_ITEMS.filter((item) => item.inBottomNav),
+    account
+      ? { path: '/profile', label: 'Профайл', icon: User }
+      : { path: '/login', label: 'Нэвтрэх', icon: User },
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 backdrop-blur-xl border-t border-border px-3 py-2 pb-safe shadow-2xl">
-      <div className="flex items-center justify-around max-w-md mx-auto">
-        {navItems.map((item) => {
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 px-2 py-2 pb-safe shadow-2xl backdrop-blur-xl lg:hidden"
+      aria-label="Үндсэн цэс"
+    >
+      <div className="mx-auto flex max-w-md items-center justify-around">
+        {items.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path;
+          const isActive = isNavItemActive(item, location.pathname);
+          const badge = item.path === '/orders' && activeOrdersCount > 0 ? activeOrdersCount : undefined;
 
           return (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className="flex flex-col items-center justify-center w-14 py-1 rounded-2xl transition-all relative"
+              aria-current={isActive ? 'page' : undefined}
+              className="relative flex w-16 flex-col items-center justify-center rounded-2xl py-1"
             >
-              {/* Active pill indicator */}
-              <div
-                className={`flex items-center justify-center w-10 h-8 rounded-2xl mb-0.5 transition-all ${
-                  isActive
-                    ? 'bg-gradient-to-br from-indigo-600 to-emerald-600 shadow-md shadow-indigo-500/30'
-                    : 'bg-transparent'
+              <span
+                className={`mb-0.5 flex h-8 w-11 items-center justify-center rounded-2xl transition-all ${
+                  isActive ? 'bg-emerald-600 shadow-md shadow-emerald-600/25' : 'bg-transparent'
                 }`}
               >
-                <div className="relative">
-                  <Icon
-                    className={`h-5 w-5 transition-all ${
-                      isActive ? 'text-white' : 'text-text-muted'
-                    }`}
-                  />
-                  {item.badge !== undefined && (
-                    <span className="absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-black text-white shadow-sm">
-                      {item.badge}
+                <span className="relative">
+                  <Icon className={`h-5 w-5 transition-all ${isActive ? 'text-white' : 'text-text-muted'}`} />
+                  {badge !== undefined && (
+                    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[9px] font-black text-slate-900">
+                      {badge}
                     </span>
                   )}
-                </div>
-              </div>
+                </span>
+              </span>
               <span
-                className={`text-[10px] tracking-tight transition-all font-bold ${
+                className={`text-[10px] font-bold leading-tight tracking-tight ${
                   isActive ? 'text-emerald-600' : 'text-text-muted'
                 }`}
               >

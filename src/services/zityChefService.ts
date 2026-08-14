@@ -1,262 +1,546 @@
-import { Product, RecipeBundle, Order, FridgeItem } from '../types';
+/**
+ * Zity Chef backend-тэй холбогдох давхарга.
+ *
+ * Endpoint-ууд нь Chef Complex-ийн `server/routes/*` дээрх бодит гэрээтэй тулгагдсан:
+ *   GET  /api/health            → { status }
+ *   GET  /api/store/products    → { products: [{ id, name, nameEn, emoji, category, unit, pricePerUnit, imageUrl, expiryDays }] }
+ *   GET  /api/recipes           → { recipes:  [{ id, title, titleEn, image, tags, time, difficulty, ingredients: string[], steps }] }
+ *   GET  /api/inventory         → { items:    [{ id, name, emoji, category, quantity, unit, expiryDays, pricePerUnit }] }  (auth)
+ *   POST /api/inventory         → нэг орц нэмнэ (auth)
+ *   POST /api/orders            → { items, totalAmount, deliveryAddress, paymentMethod }  (auth)
+ *   GET  /api/chef/dashboard    → { stats, recentOrders, recentCustomers, adminEnabled }  (auth + CHEF_ADMIN_EMAILS)
+ *
+ * Backend унтарсан үед апп ажиллахаа болихгүй — локал каталог руу шилжиж,
+ * `isLive: false` гэж илэн далангүй мэдэгдэнэ.
+ */
+
+import { ApiError, chefRequest } from './apiClient';
+import { AdminUserRow, FridgeItem, Order, Product, RecipeBundle } from '../types';
 import { MOCK_PRODUCTS, RECIPE_BUNDLES } from '../constants/mockData';
-
-const BASE_URL = (import.meta as any).env?.VITE_ZITY_CHEF_API_URL || 'http://localhost:3002';
-
-const IMAGE_MAP: Record<string, string> = {
-  'лууван': 'https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=600&q=80',
-  'үхрийн мах': 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=600&q=80',
-  'сүү': 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=600&q=80',
-  'сонгино': 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=600&q=80',
-  'өндөг': 'https://images.unsplash.com/photo-1587486913049-53fc88980cfc?w=600&q=80',
-  'алим': 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=600&q=80',
-  'гурил': 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&q=80',
-  'бяслаг': 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=600&q=80',
-};
 
 const DEFAULT_PRODUCT_IMAGE =
   'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80';
 
-function getCategorySlug(category: string): string {
-  const categoryLower = category.toLowerCase();
+const DEFAULT_RECIPE_IMAGE =
+  'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80';
 
-  if (categoryLower.includes('мах')) return 'meat';
-  if (categoryLower.includes('ногоо')) return 'vegetables';
-  if (categoryLower.includes('сүү') || categoryLower.includes('өндөг')) return 'dairy';
-  if (categoryLower.includes('гурил') || categoryLower.includes('талх')) return 'bakery';
-  if (categoryLower.includes('жимс')) return 'fruits';
-  if (categoryLower.includes('ундаа') || categoryLower.includes('ус')) return 'drinks';
-  if (categoryLower.includes('амтлагч') || categoryLower.includes('соус')) return 'spices';
+/**
+ * Chef-ийн каталог нь `in_stock = true` бараанууд л буцаадаг бөгөөд нөөцийн ТОО
+ * агуулдаггүй. Тиймээс live бараанд нөөцийн бодит хязгаар байхгүй — 0 гэж
+ * тооцвол бүх бараа "дууссан" болж харагдана.
+ */
+const LIVE_STOCK_DEFAULT = 99;
+
+/** Chef-ийн `inventory_items.category` CHECK constraint дээрх зөвшөөрөгдсөн утгууд */
+const CHEF_CATEGORIES = ['🥦 Ногоо', '🥩 Мах', '🥛 Сүү, өндөг', '🧂 Амтлагч', '🍎 Жимс'] as const;
+type ChefCategory = (typeof CHEF_CATEGORIES)[number];
+
+/** Chef-ийн `inventory_items.unit` CHECK constraint дээрх зөвшөөрөгдсөн утгууд */
+const CHEF_UNITS = ['гр', 'л', 'ш', 'g', 'l', 'pcs'] as const;
+type ChefUnit = (typeof CHEF_UNITS)[number];
+
+export interface SyncResult<T> {
+  data: T;
+  isLive: boolean;
+  /** Live татаж чадаагүй бол шалтгаан */
+  error: string | null;
+}
+
+// ── Хөрвүүлэлтийн туслахууд ─────────────────────────────────────────────────
+
+function toNumber(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function toText(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : fallback;
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof ApiError) return error.userMessage;
+  return error instanceof Error ? error.message : 'Тодорхойгүй алдаа.';
+}
+
+/** Chef-ийн ангиллын нэрийг Delguur-ийн ангиллын slug руу буулгана */
+function toCategorySlug(category: string): string {
+  const value = category.toLowerCase();
+
+  if (value.includes('мах')) return 'meat';
+  if (value.includes('ногоо')) return 'vegetables';
+  if (value.includes('сүү') || value.includes('өндөг')) return 'dairy';
+  if (value.includes('гурил') || value.includes('талх')) return 'bakery';
+  if (value.includes('жимс')) return 'fruits';
+  if (value.includes('ундаа') || value.includes('ус')) return 'drinks';
+  if (value.includes('амтлагч') || value.includes('соус')) return 'spices';
+  if (value.includes('амттан') || value.includes('чипс')) return 'snacks';
 
   return 'zity-chef';
 }
 
-function getMappedImage(name: string, explicitImage?: string): string {
-  if (explicitImage) return explicitImage;
+/**
+ * Delguur-ийн ангиллыг Chef-ийн CHECK constraint-д тохирох утга болгоно.
+ * Таарахгүй утга илгээвэл Supabase insert 502 өгнө.
+ */
+function toChefCategory(category: string, slug: string): ChefCategory {
+  if (CHEF_CATEGORIES.includes(category as ChefCategory)) return category as ChefCategory;
 
-  const nameLower = name.toLowerCase();
-  const imageKey = Object.keys(IMAGE_MAP).find((key) => nameLower.includes(key));
-  if (imageKey) return IMAGE_MAP[imageKey];
-
-  return (
-    MOCK_PRODUCTS.find((mp) => nameLower.includes(mp.name.toLowerCase()) || mp.name.toLowerCase().includes(nameLower))
-      ?.image || DEFAULT_PRODUCT_IMAGE
-  );
+  switch (slug) {
+    case 'meat':
+      return '🥩 Мах';
+    case 'dairy':
+      return '🥛 Сүү, өндөг';
+    case 'fruits':
+      return '🍎 Жимс';
+    case 'spices':
+      return '🧂 Амтлагч';
+    default:
+      return '🥦 Ногоо';
+  }
 }
 
-function getNumericValue(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+/**
+ * Delguur-ийн нэгжийг Chef-ийн зөвшөөрсөн нэгж рүү хөрвүүлнэ.
+ * `кг` → `гр` (×1000), `мл` → `л`, бусад → `ш`.
+ */
+function toChefUnit(unit: string, quantity: number): { unit: ChefUnit; quantity: number } {
+  const value = unit.trim().toLowerCase();
+
+  if (CHEF_UNITS.includes(value as ChefUnit)) {
+    return { unit: value as ChefUnit, quantity };
+  }
+  if (value === 'кг' || value === 'kg') {
+    return { unit: 'гр', quantity: quantity * 1000 };
+  }
+  if (value === 'мл' || value === 'ml') {
+    return { unit: 'л', quantity: quantity / 1000 };
+  }
+  if (value === 'литр' || value === 'l') {
+    return { unit: 'л', quantity };
+  }
+  return { unit: 'ш', quantity };
 }
 
-export class ZityChefService {
-  private static readonly fallbackFridgeItems: FridgeItem[] = [
-    { id: 'fridge-1', name: 'Шинэхэн лууван', category: 'Хүнсний ногоо', quantity: 8, unit: 'кг', expiryDays: 9, lastSyncedAt: new Date().toISOString(), source: 'Zity Chef' },
-    { id: 'fridge-2', name: 'Өндөг', category: 'Сүүн бүтээгдэхүүн', quantity: 12, unit: 'ш', expiryDays: 14, lastSyncedAt: new Date().toISOString(), source: 'Zity Chef' },
-    { id: 'fridge-3', name: 'Улаан лооль', category: 'Хүнсний ногоо', quantity: 4, unit: 'кг', expiryDays: 5, lastSyncedAt: new Date().toISOString(), source: 'Zity Chef' },
-    { id: 'fridge-4', name: 'Сүү', category: 'Сүүн бүтээгдэхүүн', quantity: 3, unit: 'л', expiryDays: 7, lastSyncedAt: new Date().toISOString(), source: 'Odoo stock' },
-  ];
+/** Emoji-г зурган орлуулагч болгож ашиглах SVG data URI */
+function emojiImage(emoji: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="54" font-size="58" text-anchor="middle" dominant-baseline="middle">${emoji}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+// ── Chef API-ийн хариуны төрлүүд ────────────────────────────────────────────
+
+interface ChefProductPayload {
+  id?: string;
+  name?: string;
+  nameEn?: string | null;
+  emoji?: string;
+  category?: string | null;
+  unit?: string;
+  pricePerUnit?: number;
+  imageUrl?: string | null;
+  expiryDays?: number;
+}
+
+interface ChefRecipePayload {
+  id?: string;
+  title?: string;
+  titleEn?: string;
+  image?: string | null;
+  tags?: string[];
+  time?: string;
+  difficulty?: string;
+  category?: string;
+  cuisine?: string;
+  ingredients?: string[];
+  steps?: unknown;
+}
+
+interface ChefInventoryPayload {
+  id?: string;
+  name?: string;
+  emoji?: string;
+  category?: string;
+  quantity?: number;
+  unit?: string;
+  expiryDays?: number;
+  pricePerUnit?: number;
+}
+
+interface ChefDashboardPayload {
+  adminEnabled?: boolean;
+  realtime?: boolean;
+  message?: string;
+  stats?: {
+    customers?: number;
+    orders?: number;
+    revenue?: number;
+    products?: number;
+    pendingOrders?: number;
+  };
+  recentOrders?: {
+    id?: string;
+    customerName?: string;
+    customerEmail?: string;
+    totalAmount?: number;
+    status?: string;
+    createdAt?: string;
+    address?: string;
+  }[];
+  recentCustomers?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    createdAt?: string;
+    subscriptionTier?: string;
+  }[];
+}
+
+/** Chef dashboard-ын нэгтгэсэн үзүүлэлт */
+export interface ChefDashboard {
+  adminEnabled: boolean;
+  message: string;
+  stats: {
+    customers: number;
+    orders: number;
+    revenue: number;
+    products: number;
+    pendingOrders: number;
+  };
+  users: AdminUserRow[];
+}
+
+// ── Mapper-ууд ──────────────────────────────────────────────────────────────
+
+function mapProduct(payload: ChefProductPayload, index: number): Product {
+  const name = toText(payload.name, `Zity Chef бараа ${index + 1}`);
+  const category = toText(payload.category, 'Хүнсний ногоо');
+  const slug = toCategorySlug(category);
+  const price = toNumber(payload.pricePerUnit, 0);
+  const emoji = toText(payload.emoji, '');
+  const expiryDays = Math.floor(toNumber(payload.expiryDays, 7));
+
+  return {
+    id: toText(payload.id, `zity-chef-${index}`),
+    name,
+    category,
+    categorySlug: slug,
+    price,
+    unit: toText(payload.unit, 'ш'),
+    // Зураг байхгүй бол emoji-г зурган болгож харуулна (хоосон дөрвөлжин гарахгүй)
+    image: toText(payload.imageUrl, emoji ? emojiImage(emoji) : DEFAULT_PRODUCT_IMAGE),
+    // Chef каталог зөвхөн in_stock бараа буцаадаг тул нөөцтэй гэж үзнэ
+    stock: LIVE_STOCK_DEFAULT,
+    // Chef ID нь UUID тул эхний тэмдэгтүүд нь бүх бараанд ижил байдаг —
+    // ялгаатай байх сүүлийн хэсгээс SKU үүсгэнэ
+    sku: `CHEF-${toText(payload.id, String(index + 1)).split('-').pop()!.toUpperCase().slice(-8)}`,
+    brand: 'Zity Chef',
+    isMongolian: true,
+    isOrganic: true,
+    description: payload.nameEn
+      ? `${name} (${payload.nameEn}) — Zity Chef дэлгүүрийн шинэхэн бүтээгдэхүүн.`
+      : `Zity Chef дэлгүүрийн шинэхэн ${name}.`,
+    expiration: `Хадгалах хугацаа: ${expiryDays} хоног`,
+    tags: ['Zity Chef'],
+    isLiveSynced: true,
+  };
+}
+
+/**
+ * Жорыг орц багц болгоно.
+ *
+ * Chef-ийн жор нь үнэ агуулдаггүй (`recipes` хүснэгтэд price багана байхгүй).
+ * Тиймээс багцын үнийг орц бүрийг каталогийн бараатай нэрээр тааруулж
+ * бодитоор тооцно — таарахгүй орцод дундаж үнэ ашиглана.
+ */
+function mapRecipeBundle(
+  payload: ChefRecipePayload,
+  index: number,
+  catalog: Product[]
+): RecipeBundle {
+  const recipeId = toText(payload.id, `chef-recipe-${index + 1}`);
+  const title = toText(payload.title, `Zity Chef жор ${index + 1}`);
+  const ingredients = Array.isArray(payload.ingredients) ? payload.ingredients : [];
+
+  const FALLBACK_INGREDIENT_PRICE = 3500;
 
   /**
-   * Fetch products directly from Zity Chef Store backend endpoint
+   * Орцуудыг каталогийн бараатай тааруулна.
+   *
+   * Нэг жорын хоёр орц ижил бараа руу таарч болно (жишээ нь "лууван" ба
+   * "жижиглэсэн лууван"). Тэр тохиолдолд тусад нь мөр үүсгэвэл сагсанд
+   * давхардаж, React key давхцана — тиймээс нэгтгэж тоо ширхгийг нь нэмнэ.
    */
-  static async fetchStoreProducts(): Promise<{ products: Product[]; isLive: boolean }> {
+  const itemsById = new Map<string, RecipeBundle['productItems'][number]>();
+
+  ingredients.forEach((ingredient, ingredientIndex) => {
+    const ingredientName = toText(ingredient, `Орц ${ingredientIndex + 1}`);
+    const lower = ingredientName.toLowerCase();
+
+    const matched = catalog.find(
+      (product) =>
+        product.name.toLowerCase() === lower ||
+        lower.includes(product.name.toLowerCase()) ||
+        product.name.toLowerCase().includes(lower)
+    );
+
+    const productId = matched?.id ?? `${recipeId}-ing-${ingredientIndex + 1}`;
+    const existing = itemsById.get(productId);
+
+    if (existing) {
+      existing.requiredQty += 1;
+      return;
+    }
+
+    itemsById.set(productId, {
+      productId,
+      productName: matched?.name ?? ingredientName,
+      requiredQty: 1,
+      unit: matched?.unit ?? 'порц',
+      pricePerUnit: matched?.discountPrice ?? matched?.price ?? FALLBACK_INGREDIENT_PRICE,
+    });
+  });
+
+  const productItems = Array.from(itemsById.values());
+
+  const price = productItems.reduce((sum, item) => sum + item.pricePerUnit * item.requiredQty, 0);
+  // Багцаар авахад 10% хямдрал
+  const discountPrice = price > 0 ? Math.round((price * 0.9) / 100) * 100 : undefined;
+
+  const steps = Array.isArray(payload.steps) ? payload.steps : [];
+
+  return {
+    id: `kit-${recipeId}`,
+    recipeId,
+    name: `${title} — Орц багц`,
+    description: toText(payload.titleEn ?? payload.tags?.join(', '), 'Zity Chef жорын шинэхэн орц'),
+    chefName: 'Chef Zity',
+    prepTime: toText(payload.time, '25 мин'),
+    // Chef жорд порцын тоо байхгүй — орцын тооноос ойролцоогоор тооцно
+    servings: Math.max(2, Math.min(6, Math.ceil(ingredients.length / 2))),
+    price: price || 24500,
+    discountPrice,
+    image: toText(payload.image, DEFAULT_RECIPE_IMAGE),
+    productItems,
+    instructions: steps.length
+      ? steps.map((step, stepIndex) => {
+          if (typeof step === 'string') return step;
+          const value = (step ?? {}) as Record<string, unknown>;
+          const stepTitle = toText(value.title, '');
+          const description = toText(value.description ?? value.text, '');
+          return `Алхам ${stepIndex + 1}: ${stepTitle}${description ? ` — ${description}` : ''}`.trim();
+        })
+      : undefined,
+    isLiveSynced: true,
+  };
+}
+
+function mapFridgeItem(payload: ChefInventoryPayload, index: number): FridgeItem {
+  return {
+    id: toText(payload.id, `fridge-${index + 1}`),
+    name: toText(payload.name, 'Орц'),
+    category: toText(payload.category, '🥦 Ногоо'),
+    quantity: toNumber(payload.quantity, 1),
+    unit: toText(payload.unit, 'ш'),
+    expiryDays: Math.floor(toNumber(payload.expiryDays, 7)),
+    lastSyncedAt: new Date().toISOString(),
+    source: 'Zity Chef',
+    emoji: payload.emoji,
+  };
+}
+
+// ── Service ─────────────────────────────────────────────────────────────────
+
+export const ZityChefService = {
+  /** Backend амьд эсэхийг шалгах хөнгөн хүсэлт */
+  async ping(signal?: AbortSignal): Promise<{ isLive: boolean; message: string }> {
     try {
-      const response = await fetch(`${BASE_URL}/api/store/products`, {
-        headers: { 'Content-Type': 'application/json' },
+      await chefRequest('/health', { timeoutMs: 4000, signal });
+      return { isLive: true, message: 'Zity Chef backend холбогдсон.' };
+    } catch (error) {
+      return { isLive: false, message: describeError(error) };
+    }
+  },
+
+  /** Дэлгүүрийн барааны каталог (нээлттэй) */
+  async fetchStoreProducts(signal?: AbortSignal): Promise<SyncResult<Product[]>> {
+    try {
+      const response = await chefRequest<{ products?: ChefProductPayload[] }>('/store/products', {
+        signal,
+      });
+      const payload = Array.isArray(response?.products) ? response.products : [];
+
+      if (payload.length === 0) {
+        return { data: MOCK_PRODUCTS, isLive: false, error: 'Zity Chef каталог хоосон байна.' };
+      }
+
+      return { data: payload.map(mapProduct), isLive: true, error: null };
+    } catch (error) {
+      return { data: MOCK_PRODUCTS, isLive: false, error: describeError(error) };
+    }
+  },
+
+  /**
+   * Жорын орц багцууд.
+   * @param catalog Багцын үнийг бодитоор тооцоход ашиглах барааны каталог
+   */
+  async fetchRecipeKits(catalog: Product[], signal?: AbortSignal): Promise<SyncResult<RecipeBundle[]>> {
+    try {
+      const response = await chefRequest<{ recipes?: ChefRecipePayload[] }>('/recipes', { signal });
+      const payload = Array.isArray(response?.recipes) ? response.recipes : [];
+
+      if (payload.length === 0) {
+        return { data: RECIPE_BUNDLES, isLive: false, error: 'Zity Chef жор олдсонгүй.' };
+      }
+
+      return {
+        data: payload.map((recipe, index) => mapRecipeBundle(recipe, index, catalog)),
+        isLive: true,
+        error: null,
+      };
+    } catch (error) {
+      return { data: RECIPE_BUNDLES, isLive: false, error: describeError(error) };
+    }
+  },
+
+  /**
+   * Zity Chef хөргөгчний нөөц. Нэвтрэлт шаардлагатай —
+   * нэвтрээгүй үед хоосон жагсаалт буцаана (хуурамч өгөгдөл харуулахгүй).
+   */
+  async fetchFridgeItems(signal?: AbortSignal): Promise<SyncResult<FridgeItem[]>> {
+    try {
+      const response = await chefRequest<{ items?: ChefInventoryPayload[] }>('/inventory', {
+        signal,
+        requireAuth: true,
+      });
+      const payload = Array.isArray(response?.items) ? response.items : [];
+
+      return { data: payload.map(mapFridgeItem), isLive: true, error: null };
+    } catch (error) {
+      return { data: [], isLive: false, error: describeError(error) };
+    }
+  },
+
+  /** Chef admin dashboard (CHEF_ADMIN_EMAILS-д багтсан хэрэглэгчид) */
+  async fetchDashboard(signal?: AbortSignal): Promise<SyncResult<ChefDashboard>> {
+    const empty: ChefDashboard = {
+      adminEnabled: false,
+      message: '',
+      stats: { customers: 0, orders: 0, revenue: 0, products: 0, pendingOrders: 0 },
+      users: [],
+    };
+
+    try {
+      const response = await chefRequest<ChefDashboardPayload>('/chef/dashboard', {
+        signal,
+        requireAuth: true,
+        timeoutMs: 10_000,
       });
 
-      if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-      const data = await response.json();
+      const users: AdminUserRow[] = (response.recentCustomers ?? []).map((customer, index) => ({
+        id: toText(customer.id, `chef-user-${index}`),
+        name: toText(customer.name, 'Нэргүй хэрэглэгч'),
+        email: toText(customer.email, '—'),
+        phone: '—',
+        source: 'Zity Chef',
+        savedItems: 0,
+        orders: 0,
+        lastSeen: toText(customer.createdAt, '—'),
+      }));
 
-      if (data.products && Array.isArray(data.products) && data.products.length > 0) {
-        const mappedProducts: Product[] = data.products.map((p: any, idx: number) => {
-          const name = p.name || p.title || `Zity Chef бараа ${idx + 1}`;
-          const category = p.category || 'Хүнсний ногоо';
-          const price = getNumericValue(p.pricePerUnit ?? p.price, 3000);
-
-          return {
-            id: p.id || `zity-p-${idx}`,
-            name,
-            category,
-            categorySlug: p.categorySlug || getCategorySlug(category),
-            price,
-            unit: p.unit || 'ш',
-            image: getMappedImage(name, p.imageUrl || p.image),
-            stock: getNumericValue(p.stock ?? p.quantity, 45 + idx * 5),
-            odooId: getNumericValue(p.odooId, 101 + idx),
-            sku: p.sku || `SKU-CHEF-${idx + 1}`,
-            brand: 'Zity Chef',
-            isMongolian: true,
-            isOrganic: true,
-            description: p.description || `Zity Chef дэлгүүрийн шинэхэн ${name}.`,
-            tags: ['Zity Chef', 'Live sync'],
-          };
-        });
-
-        // Merge with additional mock items if count is small so catalog is always full
-        if (mappedProducts.length < 8) {
-          const existingIds = new Set(mappedProducts.map((p) => p.name.toLowerCase()));
-          const extraMock = MOCK_PRODUCTS.filter((mp) => !existingIds.has(mp.name.toLowerCase()));
-          return { products: [...mappedProducts, ...extraMock], isLive: true };
-        }
-
-        return { products: mappedProducts, isLive: true };
-      }
-    } catch (err) {
-      console.warn('[ZityChefService] Could not connect to Zity Chef API, using local store data:', err);
-    }
-    return { products: MOCK_PRODUCTS, isLive: false };
-  }
-
-  /**
-   * Fetch recipes from Zity Chef backend to generate dynamic meal kits
-   */
-  static async fetchRecipeKits(): Promise<{ bundles: RecipeBundle[]; isLive: boolean }> {
-    try {
-      const response = await fetch(`${BASE_URL}/api/recipes`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-
-      if (data.recipes && Array.isArray(data.recipes) && data.recipes.length > 0) {
-        const mappedBundles: RecipeBundle[] = data.recipes.map((r: any, recipeIndex: number) => {
-          const recipeId = String(r.id || `chef-recipe-${recipeIndex + 1}`);
-          const title = r.title || r.name || `Zity Chef жор ${recipeIndex + 1}`;
-          const ingredients = Array.isArray(r.ingredients) ? r.ingredients : [];
-
-          return {
-            id: `kit-${recipeId}`,
-            recipeId,
-            name: `${title} - Орц Багц`,
-            description: r.titleEn || r.description || 'Zity Chef амттай хоолны шинэхэн орц',
-            chefName: r.chefName || 'Chef Zity',
-            prepTime: r.prepTime || r.cookTime || '25 мин',
-            servings: getNumericValue(r.servings, 2),
-            price: getNumericValue(r.price ?? r.totalPrice, 24500),
-            discountPrice: getNumericValue(r.discountPrice ?? r.salePrice, 21900),
-            image:
-              r.image ||
-              r.imageUrl ||
-              'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80',
-            productItems: ingredients.map((ing: any, i: number) => {
-              const ingredientName = typeof ing === 'string' ? ing : ing.name || ing.productName || `Орц ${i + 1}`;
-
-              return {
-                productId: String((typeof ing === 'object' && (ing.productId || ing.id)) || `${recipeId}-ing-${i + 1}`),
-                productName: ingredientName,
-                requiredQty: getNumericValue(typeof ing === 'object' ? ing.requiredQty ?? ing.quantity : 1, 1),
-                unit: (typeof ing === 'object' && ing.unit) || 'порц',
-                pricePerUnit: getNumericValue(typeof ing === 'object' ? ing.pricePerUnit ?? ing.price : undefined, 3500),
-              };
-            }),
-            instructions: r.steps
-              ? r.steps.map((s: any, i: number) =>
-                  typeof s === 'string'
-                    ? s
-                    : `Алхам ${s.stepNumber || i + 1}: ${s.title || ''}${s.description ? ` - ${s.description}` : ''}`
-                )
-              : undefined,
-          };
-        });
-
-        // Merge with existing bundles if any
-        const combined = [...mappedBundles];
-        RECIPE_BUNDLES.forEach((b) => {
-          if (!combined.some((c) => c.name.includes(b.name))) {
-            combined.push(b);
-          }
-        });
-
-        return { bundles: combined, isLive: true };
-      }
-    } catch (err) {
-      console.warn('[ZityChefService] Recipe API unavailable, using local recipes:', err);
-    }
-    return { bundles: RECIPE_BUNDLES, isLive: false };
-  }
-
-  static async fetchFridgeItems(): Promise<{ items: FridgeItem[]; isLive: boolean }> {
-    try {
-      const response = await fetch(`${BASE_URL}/api/inventory`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-
-      const items = Array.isArray(data.inventory)
-        ? data.inventory.map((item: any, idx: number) => ({
-            id: item.id || `fridge-${idx + 1}`,
-            name: item.name || 'Орц',
-            category: item.category || 'Хүнсний ногоо',
-            quantity: Number(item.quantity || 1),
-            unit: item.unit || 'ш',
-            expiryDays: Number(item.expiryDays || 7),
-            lastSyncedAt: item.lastUpdated || new Date().toISOString(),
-            source: item.source || 'Zity Chef',
-          }))
-        : [];
-
-      if (items.length > 0) {
-        return { items, isLive: true };
-      }
-    } catch (err) {
-      console.warn('[ZityChefService] Inventory API unavailable, using local fridge data:', err);
-    }
-
-    return { items: this.fallbackFridgeItems, isLive: false };
-  }
-
-  /**
-   * Push Order to Zity Chef backend & automatically add purchased ingredients into Zity Chef's Fridge!
-   */
-  static async syncOrderToZityChef(order: Order): Promise<boolean> {
-    try {
-      // 1. Post to Zity Chef /api/orders
-      const res = await fetch(`${BASE_URL}/api/orders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer guest-token`,
+      return {
+        data: {
+          adminEnabled: response.adminEnabled === true,
+          message: toText(response.message, ''),
+          stats: {
+            customers: toNumber(response.stats?.customers, 0),
+            orders: toNumber(response.stats?.orders, 0),
+            revenue: toNumber(response.stats?.revenue, 0),
+            products: toNumber(response.stats?.products, 0),
+            pendingOrders: toNumber(response.stats?.pendingOrders, 0),
+          },
+          users,
         },
-        body: JSON.stringify({
+        isLive: true,
+        error: null,
+      };
+    } catch (error) {
+      return { data: empty, isLive: false, error: describeError(error) };
+    }
+  },
+
+  /**
+   * Захиалгыг Zity Chef рүү илгээж, худалдаж авсан орцыг хөргөгчид нэмнэ.
+   *
+   * Хоёулаа нэвтрэлт шаарддаг. Захиалга үүсэх нь Chef backend-ээс хамаарахгүй —
+   * амжилтгүй болбол зөвхөн синкийн төлөв "failed" болно.
+   */
+  async syncOrder(order: Order): Promise<{ success: boolean; message: string }> {
+    try {
+      await chefRequest('/orders', {
+        method: 'POST',
+        requireAuth: true,
+        timeoutMs: 12_000,
+        body: {
           items: order.items.map((item) => ({
             id: item.id,
             name: item.name,
             quantity: item.quantity,
-            price: item.discountPrice || item.price,
+            price: item.discountPrice ?? item.price,
           })),
           totalAmount: order.totalAmount,
-          deliveryAddress: `${order.address.district}, ${order.address.khoroo}, ${order.address.streetBuilding}`,
+          deliveryAddress: [
+            order.address.district,
+            order.address.khoroo,
+            order.address.streetBuilding,
+            order.address.entranceAppt,
+          ]
+            .filter(Boolean)
+            .join(', '),
           paymentMethod: order.paymentMethod,
-        }),
+        },
       });
-
-      if (!res.ok) console.warn('[ZityChefService] Order sync responded with non-200');
-
-      // 2. Add each item to Zity Chef Fridge /api/inventory
-      for (const item of order.items) {
-        await fetch(`${BASE_URL}/api/inventory`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer guest-token`,
-          },
-          body: JSON.stringify({
-            name: item.name,
-            sku: item.sku,
-            imageUrl: item.image,
-            emoji: item.categorySlug === 'meat' ? '🥩' : '🥬',
-            category: item.category,
-            quantity: item.quantity,
-            unit: item.unit,
-            expiryDays: 7,
-            pricePerUnit: item.discountPrice || item.price,
-          }),
-        }).catch(() => {});
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        return { success: false, message: 'Zity Chef рүү илгээхийн тулд нэвтэрсэн байх шаардлагатай.' };
       }
-
-      return true;
-    } catch (err) {
-      console.warn('[ZityChefService] Failed to push order to Zity Chef backend:', err);
-      return false;
+      return { success: false, message: describeError(error) };
     }
-  }
-}
+
+    // Орцуудыг хөргөгчид зэрэг нэмнэ — нэг нь алдаа өгсөн ч бусад нь үргэлжилнэ.
+    // Нэгж болон ангиллыг Chef-ийн DB constraint-д тохируулж хөрвүүлнэ.
+    const inventoryResults = await Promise.allSettled(
+      order.items.map((item) => {
+        const { unit, quantity } = toChefUnit(item.unit, item.quantity);
+
+        return chefRequest('/inventory', {
+          method: 'POST',
+          requireAuth: true,
+          timeoutMs: 12_000,
+          body: {
+            name: item.name,
+            emoji: item.categorySlug === 'meat' ? '🥩' : '🥬',
+            category: toChefCategory(item.category, item.categorySlug),
+            quantity: Math.round(quantity * 100) / 100,
+            unit,
+            expiryDays: 7,
+            pricePerUnit: item.discountPrice ?? item.price,
+          },
+        });
+      })
+    );
+
+    const failedCount = inventoryResults.filter((result) => result.status === 'rejected').length;
+
+    if (failedCount === 0) {
+      return {
+        success: true,
+        message: `Захиалга илгээгдэж, ${order.items.length} орц Zity Chef хөргөгчид нэмэгдлээ.`,
+      };
+    }
+
+    return {
+      success: true,
+      message: `Захиалга илгээгдлээ. ${failedCount}/${order.items.length} орц хөргөгчид нэмэгдсэнгүй.`,
+    };
+  },
+};

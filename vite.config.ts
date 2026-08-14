@@ -7,15 +7,22 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
     server: {
+      /**
+       * Порт нь ТОГТМОЛ байх ёстой.
+       *
+       * Өмнө нь порт банд байвал Vite чимээгүйхэн дараагийн порт руу шилждэг
+       * байсан (3000 → 3003). Тэр үед OAuth-ийн `redirect_to` өөрчлөгдөж,
+       * Supabase-ийн зөвшөөрөгдсөн жагсаалтад таарахаа больдог тул нэвтрэлт
+       * Site URL (Zity Chef) руу буцаадаг байв. Одоо банд бол алдаа өгч зогсоно.
+       */
+      port: 3005,
+      strictPort: true,
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api/zity-chef': {

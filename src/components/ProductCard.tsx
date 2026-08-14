@@ -1,134 +1,165 @@
 import React, { useState } from 'react';
-import { Plus, Minus, ShieldCheck } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import { Product } from '../types';
 import { useCartStore } from '../store/useCartStore';
+import { useToastStore } from '../store/useToastStore';
 import { Skeleton } from './ui/Skeleton';
+import { formatMnt } from '../lib/format';
 
 interface ProductCardProps {
-  key?: React.Key;
   product: Product;
   onClick: (product: Product) => void;
 }
 
 export function ProductCard({ product, onClick }: ProductCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
-  const { items, addItem, decreaseQuantity } = useCartStore();
+  const [imageFailed, setImageFailed] = useState(false);
 
-  const cartItem = items.find((item) => item.id === product.id);
-  const quantity = cartItem?.quantity || 0;
+  const quantity = useCartStore((state) => state.getItemQuantity(product.id));
+  const { addItem, decreaseQuantity } = useCartStore();
+  const showToast = useToastStore((state) => state.show);
 
-  const handleAdd = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    addItem(product);
-  };
-
-  const handleRemove = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    decreaseQuantity(product.id);
-  };
+  const isOutOfStock = product.stock <= 0;
+  const isLowStock = !isOutOfStock && product.stock <= 10;
+  const hasReachedStock = quantity >= product.stock;
 
   const discountPercent = product.discountPrice
     ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
     : 0;
 
+  const handleAdd = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    const result = addItem(product);
+    // Амжилттай нэмэхэд toast гаргахгүй — тоо шууд өөрчлөгдөж харагдана.
+    // Зөвхөн саад тохиолдвол шалтгааныг мэдэгдэнэ.
+    if (!result.ok) showToast(result.message, 'warning');
+  };
+
+  const handleRemove = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    decreaseQuantity(product.id);
+  };
+
   return (
     <div
       onClick={() => onClick(product)}
-      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-3xl bg-surface border border-border/80 shadow-xs transition-all hover:shadow-lg hover:border-emerald-500/40 hover:-translate-y-0.5 active:scale-[0.98]"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick(product);
+        }
+      }}
+      aria-label={`${product.name}, ${formatMnt(product.discountPrice ?? product.price)}`}
+      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-xs transition-all hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-lg active:scale-[0.98] ${
+        isOutOfStock ? 'opacity-70' : ''
+      }`}
     >
-      {/* Image Container */}
       <div className="relative aspect-square w-full overflow-hidden bg-surface-hover">
-        {!imageLoaded && <Skeleton className="absolute inset-0" />}
-        <img
-          src={product.image}
-          alt={product.name}
-          onLoad={() => setImageLoaded(true)}
-          className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 ${
-            imageLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
-        />
+        {!imageLoaded && !imageFailed && <Skeleton className="absolute inset-0" />}
 
-        {/* Gradient Overlay for card depth */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-black/20" />
-
-        {/* Discount Badge */}
-        {product.discountPrice && (
-          <div className="absolute top-2.5 left-2.5 rounded-full bg-rose-600 px-2.5 py-0.5 text-[10px] font-black text-white shadow-md">
-            -{discountPercent}%
-          </div>
+        {imageFailed ? (
+          <div className="flex h-full w-full items-center justify-center text-3xl">🛒</div>
+        ) : (
+          <img
+            src={product.image}
+            alt={product.name}
+            loading="lazy"
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageFailed(true)}
+            className={`h-full w-full object-cover transition-all duration-500 group-hover:scale-105 ${
+              imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
         )}
 
-        {/* Mongolian / Organic Badges */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/30 via-transparent to-transparent" />
+
+        {product.discountPrice && (
+          <span className="absolute left-2.5 top-2.5 rounded-full bg-rose-600 px-2.5 py-0.5 text-[10px] font-black text-white shadow-md">
+            -{discountPercent}%
+          </span>
+        )}
+
         {(product.isMongolian || product.isOrganic) && (
-          <div className="absolute top-2.5 right-2.5 flex flex-col gap-1">
+          <div className="absolute right-2.5 top-2.5 flex flex-col gap-1">
             {product.isMongolian && (
-              <span className="rounded-full bg-blue-600/90 px-2 py-0.5 text-[9px] font-black text-white shadow-xs backdrop-blur-md">
+              <span className="rounded-full bg-blue-600/90 px-2 py-0.5 text-[9px] font-black text-white backdrop-blur-md">
                 🇲🇳 МН
               </span>
             )}
             {product.isOrganic && (
-              <span className="rounded-full bg-emerald-600/90 px-2 py-0.5 text-[9px] font-black text-white shadow-xs backdrop-blur-md">
+              <span className="rounded-full bg-emerald-600/90 px-2 py-0.5 text-[9px] font-black text-white backdrop-blur-md">
                 🌿 OG
               </span>
             )}
           </div>
         )}
 
-        {/* Stock status indicator */}
-        {product.stock <= 10 && (
-          <div className="absolute bottom-2 left-2 right-2 rounded-full bg-amber-500/90 py-0.5 text-center text-[9px] font-black text-slate-950 backdrop-blur-md shadow-xs">
-            ⚠ {product.stock} {product.unit} үлдлээ
+        {isOutOfStock ? (
+          <div className="absolute inset-x-2 bottom-2 rounded-full bg-slate-900/85 py-1 text-center text-[10px] font-black text-white backdrop-blur-md">
+            Нөөц дууссан
           </div>
+        ) : (
+          isLowStock && (
+            <div className="absolute inset-x-2 bottom-2 rounded-full bg-amber-500/90 py-0.5 text-center text-[9px] font-black text-slate-950 backdrop-blur-md">
+              ⚠ {product.stock} {product.unit} үлдлээ
+            </div>
+          )
         )}
       </div>
 
-      {/* Content */}
       <div className="flex flex-1 flex-col p-3.5 sm:p-4">
-        {/* Category & SKU subtitle */}
-        <div className="mb-1 flex items-center justify-between text-[10px] font-bold text-emerald-600">
+        <div className="mb-1 flex items-center justify-between gap-1 text-[10px] font-bold text-emerald-600">
           <span className="truncate">{product.category}</span>
-          {product.sku && <span className="font-mono text-text-muted text-[9px] shrink-0">{product.sku}</span>}
+          {product.sku && (
+            <span className="shrink-0 font-mono text-[9px] text-text-subtle">{product.sku}</span>
+          )}
         </div>
 
-        {/* Product Name */}
-        <h3 className="line-clamp-2 text-xs sm:text-sm font-bold text-text-main leading-snug mb-3">
+        <h3 className="mb-3 line-clamp-2 text-xs font-bold leading-snug text-text-main sm:text-sm">
           {product.name}
         </h3>
 
-        {/* Bottom Price & Add Action */}
-        <div className="mt-auto flex items-end justify-between gap-1 pt-1 border-t border-border/50">
-          {/* Price Tag */}
-          <div className="flex flex-col">
+        <div className="mt-auto flex items-end justify-between gap-1 border-t border-border/60 pt-2">
+          <div className="flex min-w-0 flex-col">
             {product.discountPrice ? (
               <>
-                <span className="text-[10px] text-text-muted line-through font-medium">
-                  {product.price.toLocaleString()}₮
+                <span className="text-[10px] font-medium text-text-subtle line-through">
+                  {formatMnt(product.price)}
                 </span>
-                <span className="text-sm sm:text-base font-black text-emerald-600">
-                  ₮{product.discountPrice.toLocaleString()}
+                <span className="text-sm font-black text-emerald-600 sm:text-base">
+                  {formatMnt(product.discountPrice)}
                 </span>
               </>
             ) : (
-              <span className="text-sm sm:text-base font-black text-text-main">
-                ₮{product.price.toLocaleString()}
+              <span className="text-sm font-black text-text-main sm:text-base">
+                {formatMnt(product.price)}
               </span>
             )}
-            <span className="text-[9px] text-text-muted font-semibold">/ {product.unit}</span>
+            <span className="text-[9px] font-semibold text-text-subtle">/ {product.unit}</span>
           </div>
 
-          {/* Add to Cart Circular Action Button */}
-          {quantity > 0 ? (
-            <div className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 p-1 border border-emerald-500/30">
+          {isOutOfStock ? (
+            <span className="shrink-0 rounded-full border border-border bg-surface-hover px-2.5 py-1.5 text-[9px] font-bold text-text-muted">
+              Дууссан
+            </span>
+          ) : quantity > 0 ? (
+            <div className="flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 p-1">
               <button
                 onClick={handleRemove}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface text-emerald-600 shadow-xs hover:bg-surface-hover active:scale-90 transition-all"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-surface text-emerald-600 shadow-xs transition-all hover:bg-surface-hover active:scale-90"
+                aria-label="Тоо хасах"
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
-              <span className="min-w-[16px] text-center text-xs font-black text-emerald-600">{quantity}</span>
+              <span className="min-w-[18px] text-center text-xs font-black text-emerald-600">{quantity}</span>
               <button
                 onClick={handleAdd}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md hover:bg-emerald-700 active:scale-90 transition-all"
+                disabled={hasReachedStock}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md transition-all hover:bg-emerald-700 active:scale-90 disabled:opacity-40"
+                aria-label="Тоо нэмэх"
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
@@ -136,7 +167,8 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           ) : (
             <button
               onClick={handleAdd}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-700 active:scale-90 transition-all"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md shadow-emerald-600/25 transition-all hover:bg-emerald-700 active:scale-90"
+              aria-label={`${product.name} сагсанд нэмэх`}
               title="Сагсанд нэмэх"
             >
               <Plus className="h-5 w-5" />

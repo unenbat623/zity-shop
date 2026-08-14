@@ -1,89 +1,165 @@
-# 🛒 Zity Shop (Zity Delguur WebApp)
+# 🛒 Zity Delguur (Zity Shop)
 
-Official e-commerce web application for **Zity Chef Complex**, integrated seamlessly with **Odoo ERP** backend for real-time stock management and order processing.
-
-![Zity Shop](https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80)
-
-## ✨ Key Features
-
-- **🛒 Modern E-Commerce Storefront**: Professional mobile-first UI built with React 19, TypeScript, and Tailwind CSS.
-- **🏬 Dual Delivery Modes**: Supports Express Door Delivery (30 mins) and Store Pickup (scheduled time slots).
-- **📦 Odoo ERP Real-time Integration**:
-  - Live stock level sync (`product.product`, `stock.quant`).
-  - Automatic Sale Order creation (`sale.order`) in Odoo upon payment confirmation.
-  - Interactive Odoo Sync Status dashboard and live RPC sync logs.
-- **👨‍🍳 Zity Chef Ecosystem Sync**:
-  - Browse Zity Chef curated Recipe Meal Kits (e.g. "Цуйван багц", "Авокадотой өндөгний тост").
-  - One-click import of recipe ingredient bundles into cart.
-  - Automatic synchronization of purchased grocery items directly into the user's **Zity Chef Fridge/Inventory** (`/api/inventory`).
-- **💳 Multi-payment Gateway Simulator**: Instant QPay QR code generator with simulated bank payments (Khan Bank, Golomt, State Bank, Xac, Trade and Development Bank, SocialPay, MonPay).
-- **📋 Real-time Order Tracking**: Visual 5-step order progress timeline (Order Received ➔ Odoo Synced ➔ Packing ➔ Shipping ➔ Delivered).
-- **🌙 Dynamic Theme System**: Light and sleek dark mode support.
+**Zity Chef Complex**-ийн албан ёсны цахим дэлгүүр. Zity Chef backend, Supabase Auth,
+Odoo ERP-тэй нэгдсэн design system болон нэгдсэн хэрэглэгчийн бүртгэлээр ажиллана.
 
 ---
 
-## 🛠️ Technology Stack
+## ✨ Гол боломжууд
 
-- **Frontend**: React 19, TypeScript, Vite
-- **State Management**: Zustand
-- **Styling**: Tailwind CSS v4, Lucide Icons
-- **Backend / Services**:
-  - **Odoo ERP Service**: JSON-RPC connection simulation & endpoint handler (`odooService.ts`)
-  - **Zity Chef Service**: Direct REST API integration with Zity Chef server on port 3002 (`zityChefService.ts`)
+### 🔐 Бүртгэл & нэвтрэлт (Supabase)
+- Google-ээр нэг товшилтоор нэвтрэх
+- Имэйл + нууц үгээр бүртгүүлэх / нэвтрэх / нууц үг сэргээх
+- Session автоматаар сунгагдана (refresh token) — 1 цаг тутам гарах шаардлагагүй
+- Нэвтрээгүй хэрэглэгчид **хуурамч профайл харуулахгүй** — зочин төлөв тодорхой
+- `/orders`, `/checkout`, `/profile`, `/zity-fridge` хуудсууд хамгаалагдсан
+- `/odoo-admin` зөвхөн `VITE_ADMIN_EMAILS` жагсаалтад байгаа хэрэглэгчид
+
+### 🍳 Zity Chef интеграц
+- Барааны каталог, жорын орц багц, хөргөгчийн нөөц нь Chef backend-ээс live татагдана
+- Бүх дэлгэц **нэг caталог store**-оос өгөгдөл авна — давхар fetch, зөрүүтэй өгөгдөл байхгүй
+- Backend унтарсан үед апп ажиллахаа болихгүй: локал каталог руу шилжиж,
+  "Локал каталог" гэж илэн далангүй харуулна
+- Худалдан авсан орц Zity Chef хөргөгчид автоматаар нэмэгдэнэ
+
+### 🛍 Дэлгүүр & сагс
+- Ангиллаар шүүх (slug-аар — эх сурвалж хамаарахгүй зөв ажиллана), нэр/SKU/брэндээр хайх
+- Нөөцөөс илүү тоо ширхэг нэмэхийг зөвшөөрөхгүй
+- Сагс localStorage-д хадгалагдана — хуудас сэргээхэд алдагдахгүй
+- Купон, үнэгүй хүргэлтийн босго, доод дүнгийн шалгалт
+
+### 📦 Захиалга
+- Odoo болон Chef рүү **зэрэг** синк — аль нэг нь унасан ч захиалга алдагдахгүй
+- Синкийн төлөв захиалга тус бүрт харагдана, амжилтгүй бол **дахин илгээх** товч
+- Бэлнээр төлөх захиалга хүргэгдэх үед л "төлөгдсөн" болно
+- Захиалгын явц `createdAt`-аас тооцогддог тул хуудас сэргээхэд ч зөв үргэлжилнэ
+
+### 🎨 Design system & UI
+- Өөрийн лого (тогоочийн малгай + Z + навч), бүрэн PWA icon багц, OG зураг
+- Бүх өнгө `--zity-*` token-оос ирнэ — light/dark горим бүрэн зөв
+- Theme сонголт хадгалагдана, OS-ийн тохиргоог дагах "system" горимтой
+- `AppShell` — бүх хуудас нэг бүрхүүлтэй: desktop дээр байнгын sidebar,
+  мобайл дээр drawer + доод цэс; padding/өргөн хаана ч ижил
+- Нэг `Modal` суурь — Esc, backdrop, focus trap, focus сэргээлт, зөв ARIA
+- Toast мэдэгдэл, skeleton ачаалалт, хоосон төлөвийн ойлгомжтой заавар
+- `prefers-reduced-motion` дэмжлэг, гарнаас удирдах focus ring, aria шошго
 
 ---
 
-## 🚀 Quick Start
+## 🛠 Технологи
 
-### 1. Clone & Install Dependencies
+| Давхарга | Хэрэгсэл |
+| --- | --- |
+| Frontend | React 19, TypeScript (strict), Vite 6 |
+| State | Zustand 5 (+ persist) |
+| Styling | Tailwind CSS 4 (CSS variable token) |
+| Auth | Supabase Auth (REST) |
+| Icons | lucide-react |
+
+---
+
+## 🚀 Эхлүүлэх
 
 ```bash
-git clone https://github.com/unenbat623/zity-shop.git
-cd zity-shop
 npm install
+cp .env.example .env      # утгуудаа бөглөнө
+npm run dev               # http://localhost:3000
 ```
 
-### 2. Configure Environment Variables
+### Zity Chef-тэй хамт ажиллуулах
 
-Create a `.env` file based on `.env.example`:
+Delguur нь Chef Complex-тэй **ижил Supabase төсөлд** холбогдоно — нэг бүртгэлээр
+хоёуланд нэвтэрч, хөргөгч/захиалгын өгөгдөл хуваалцагдана.
+
+```bash
+# 1) Chef backend (порт 3002)
+cd ../zity-chef-complex && npm run dev:server
+
+# 2) Delguur frontend
+cd ../zity-delguur-app && npm run dev
+```
+
+`.env` дээрх `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` нь Chef төслийнхтэй
+**яг ижил** байх ёстой. Дэлгэрэнгүйг [`docs/chef-backend-env.md`](docs/chef-backend-env.md).
+
+### 🌐 Production
+
+| Апп | URL |
+| --- | --- |
+| Zity Delguur | https://zity-shop.vercel.app |
+| Zity Chef (UI + API) | https://zity-chef.vercel.app |
+
+Deploy хийхийн өмнө гурван зүйлийг тохируулна:
+
+1. **Delguur Vercel env** — `VITE_ZITY_CHEF_API_URL=https://zity-chef.vercel.app`
+2. **Supabase Redirect URLs** — `https://zity-shop.vercel.app/login` нэмэх
+3. **Chef `ALLOWED_ORIGINS`** — `https://zity-shop.vercel.app` нэмэх (CORS)
+
+Алхам бүрийн дэлгэрэнгүйг [`docs/chef-backend-env.md`](docs/chef-backend-env.md)-ээс үзнэ үү.
+
+### Тохиргоо
+
+`.env` доторх утгуудын тайлбарыг [`.env.example`](.env.example)-ээс,
+backend талын дэлгэрэнгүйг [`docs/chef-backend-env.md`](docs/chef-backend-env.md)-ээс үзнэ үү.
+
+Хамгийн багадаа:
 
 ```env
-VITE_ODOO_URL=https://odoo.zity.mn
-VITE_ODOO_DB=zity_delguur_db
-VITE_ODOO_USERNAME=api_admin@zity.mn
-VITE_ODOO_API_KEY=your_odoo_api_key
-
 VITE_ZITY_CHEF_API_URL=http://localhost:3002
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_ADMIN_EMAILS=admin@zity.mn
 ```
 
-### 3. Run Development Server
+> Supabase тохируулаагүй ч апп ажиллана — дэлгүүр, сагс үзэгдэнэ, харин нэвтрэлт
+> идэвхгүй болж дэлгэц дээр тохиргооны заавар харагдана.
+
+### Скриптүүд
 
 ```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) or [http://localhost:3001](http://localhost:3001) in your browser.
-
----
-
-## 📁 Directory Structure
-
-```
-zity-shop/
-├── src/
-│   ├── components/      # UI components (Header, ProductCard, CategoryList, PaymentModal, BottomNav)
-│   ├── constants/       # Mock catalog data, SKUs, and recipe bundles
-│   ├── screens/         # Page screens (HomeScreen, CartScreen, CheckoutScreen, RecipeKitsScreen, etc.)
-│   ├── services/        # Odoo ERP & Zity Chef API connection handlers
-│   ├── store/           # Zustand state stores (Cart, Order, Auth, Odoo, Search, Theme)
-│   ├── types/           # Comprehensive TypeScript interfaces
-│   └── App.tsx          # Main routing & application wrapper
-├── public/              # Static assets & icons
-└── vite.config.ts       # Vite build & proxy configuration
+npm run dev       # dev сервер (Chef API-г /api/zity-chef proxy-оор дамжуулна)
+npm run lint      # TypeScript strict шалгалт
+npm run build     # production build
+npm run preview   # build-ийг урьдчилан үзэх
 ```
 
 ---
 
-## 📝 License
+## 📁 Бүтэц
 
-Distributed under the MIT License.
+```
+src/
+├── lib/
+│   ├── env.ts            # орчны хувьсагчийн нэг цэгийн хандалт + шалгалт
+│   ├── format.ts         # mn-MN мөнгө/огноо форматлагч
+│   └── utils.ts
+├── services/
+│   ├── apiClient.ts      # timeout + auth token + нэгдсэн алдаатай fetch
+│   ├── zityChefService.ts
+│   ├── supabaseAuthService.ts
+│   └── odooService.ts    # bridge / симуляц горим
+├── store/                # zustand: auth, catalog, cart, order, odoo, theme, toast, search
+├── components/           # Header, BottomNav, ProductCard, RequireAuth, ui/*
+├── screens/              # хуудас бүр
+└── types/                # нэгдсэн TypeScript интерфейс
+```
+
+---
+
+## 🔒 Аюулгүй байдал
+
+`VITE_*` хувьсагч browser-т **ил** орно. Тиймээс энэ repo-д дараах зүйлс байхгүй
+бөгөөд байх ч ёсгүй:
+
+- Odoo API key → backend env (`ODOO_API_KEY`)
+- SMTP / Gmail App Password → backend env
+- Supabase service role key, JWT secret → backend env
+- Google OAuth client secret → Supabase dashboard дээр
+
+Admin dashboard дээр эдгээрийг оруулах талбар байхгүй — зөвхөн тохиргооны заавар харагдана.
+
+---
+
+## 📝 Лиценз
+
+MIT
