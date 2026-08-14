@@ -1,47 +1,109 @@
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Zity Chef × Zity Delguur — нэгдсэн design system
+   Token-ууд `--zity-*` дээр тодорхойлогдож, Tailwind theme рүү map хийгдэнэ.
+   Ингэснээр `@theme` доторх утга өөрийгөө заасан циклд орохгүй.
+   ────────────────────────────────────────────────────────────────────────── */
+
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
 
-  --color-primary: var(--color-primary);
-  --color-primary-hover: var(--color-primary-hover);
-  --color-primary-light: var(--color-primary-light);
-  --color-background: var(--color-background);
-  --color-surface: var(--color-surface);
-  --color-surface-hover: var(--color-surface-hover);
-  --color-text-main: var(--color-text-main);
-  --color-text-muted: var(--color-text-muted);
-  --color-border: var(--color-border);
+  --color-primary: var(--zity-primary);
+  --color-primary-hover: var(--zity-primary-hover);
+  --color-primary-light: var(--zity-primary-light);
+  --color-accent: var(--zity-accent);
 
-  --shadow-primary-btn: var(--shadow-primary-btn);
+  --color-background: var(--zity-background);
+  --color-surface: var(--zity-surface);
+  --color-surface-hover: var(--zity-surface-hover);
+  --color-surface-raised: var(--zity-surface-raised);
+
+  --color-text-main: var(--zity-text-main);
+  --color-text-muted: var(--zity-text-muted);
+  --color-text-subtle: var(--zity-text-subtle);
+
+  --color-border: var(--zity-border);
+  --color-border-strong: var(--zity-border-strong);
+
+  --color-success: var(--zity-success);
+  --color-warning: var(--zity-warning);
+  --color-danger: var(--zity-danger);
+  --color-info: var(--zity-info);
+
+  --shadow-primary-btn: var(--zity-shadow-primary);
+  --shadow-card: var(--zity-shadow-card);
+
+  --radius-card: 1.25rem;
+  --radius-panel: 1.5rem;
 }
 
 @layer base {
+  /* Light theme (default) */
   :root {
-    --color-primary: #10B981;
-    --color-primary-hover: #059669;
-    --color-primary-light: rgba(16, 185, 129, 0.1);
-    --color-background: #F8FAFB;
-    --color-surface: #FFFFFF;
-    --color-surface-hover: #F1F5F4;
-    --color-text-main: #0F172A;
-    --color-text-muted: #64748B;
-    --color-border: #E2E8F0;
-    --shadow-primary-btn: 0 4px 14px 0 rgba(16, 185, 129, 0.25);
+    --zity-primary: #10b981;
+    --zity-primary-hover: #059669;
+    --zity-primary-light: rgb(16 185 129 / 0.1);
+    --zity-accent: #6366f1;
+
+    --zity-background: #f6f8fa;
+    --zity-surface: #ffffff;
+    --zity-surface-hover: #f1f5f4;
+    --zity-surface-raised: #ffffff;
+
+    --zity-text-main: #0f172a;
+    --zity-text-muted: #64748b;
+    --zity-text-subtle: #94a3b8;
+
+    --zity-border: #e2e8f0;
+    --zity-border-strong: #cbd5e1;
+
+    --zity-success: #10b981;
+    --zity-warning: #f59e0b;
+    --zity-danger: #ef4444;
+    --zity-info: #3b82f6;
+
+    --zity-shadow-primary: 0 4px 14px 0 rgb(16 185 129 / 0.25);
+    --zity-shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.06), 0 1px 3px 0 rgb(15 23 42 / 0.04);
+
+    /* Brand gradient — Chef болон Delguur талд ижил хэрэглэгдэнэ */
+    --zity-brand-gradient: linear-gradient(135deg, #047857 0%, #0f766e 55%, #0f172a 100%);
+    --zity-brand-on: #ffffff;
+
+    color-scheme: light;
   }
 
-  /* Zity Chef Standardized Dark Ecosystem Theme */
+  /* Dark theme — Zity Chef ecosystem standard */
   .dark {
-    --color-primary: #10B981;
-    --color-primary-hover: #059669;
-    --color-primary-light: rgba(16, 185, 129, 0.15);
-    --color-background: #0B0F17;
-    --color-surface: #131A26;
-    --color-surface-hover: #1E293B;
-    --color-text-main: #F8FAFC;
-    --color-text-muted: #94A3B8;
-    --color-border: #1E293B;
-    --shadow-primary-btn: 0 4px 14px 0 rgba(16, 185, 129, 0.4);
+    --zity-primary: #10b981;
+    --zity-primary-hover: #34d399;
+    --zity-primary-light: rgb(16 185 129 / 0.16);
+    --zity-accent: #818cf8;
+
+    --zity-background: #0b0f17;
+    --zity-surface: #131a26;
+    --zity-surface-hover: #1b2536;
+    --zity-surface-raised: #182031;
+
+    --zity-text-main: #f8fafc;
+    --zity-text-muted: #94a3b8;
+    --zity-text-subtle: #64748b;
+
+    --zity-border: #1e293b;
+    --zity-border-strong: #334155;
+
+    --zity-success: #34d399;
+    --zity-warning: #fbbf24;
+    --zity-danger: #f87171;
+    --zity-info: #60a5fa;
+
+    --zity-shadow-primary: 0 4px 14px 0 rgb(16 185 129 / 0.35);
+    --zity-shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+
+    --zity-brand-gradient: linear-gradient(135deg, #064e3b 0%, #0f766e 55%, #0b0f17 100%);
+    --zity-brand-on: #ffffff;
+
+    color-scheme: dark;
   }
 
   * {
@@ -54,10 +116,120 @@
   }
 
   body {
-    background-color: var(--color-background);
-    color: var(--color-text-main);
+    background-color: var(--zity-background);
+    color: var(--zity-text-main);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Theme солиход хатуу шилжилт хийхгүйгээр зөөлөн шилжинэ */
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Гарнаас удирдах хэрэглэгчид бүх интерактив элемент дээр тод focus ring */
+  :focus-visible {
+    outline: 2px solid var(--zity-primary);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Хөдөлгөөн багасгах тохиргоотой хэрэглэгчдэд анимацийг хаана */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Brand gradient — hero, profile header, login зэрэгт нэг эх сурвалжаас */
+  .zity-brand-surface {
+    background: var(--zity-brand-gradient);
+    color: var(--zity-brand-on);
+  }
+
+  /* Гол үйлдлийн товч */
+  .zity-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 1rem;
+    background-color: var(--zity-primary);
+    color: #ffffff;
+    font-weight: 800;
+    box-shadow: var(--zity-shadow-primary);
+    transition: background-color 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+  }
+  .zity-btn-primary:hover:not(:disabled) {
+    background-color: var(--zity-primary-hover);
+  }
+  .zity-btn-primary:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .zity-btn-primary:disabled {
+    opacity: 0.55;
+  }
+
+  /* Хоёрдогч товч */
+  .zity-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 1rem;
+    background-color: var(--zity-surface-hover);
+    color: var(--zity-text-main);
+    border: 1px solid var(--zity-border);
+    font-weight: 700;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+  }
+  .zity-btn-secondary:hover:not(:disabled) {
+    background-color: var(--zity-border);
+  }
+  .zity-btn-secondary:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .zity-btn-secondary:disabled {
+    opacity: 0.55;
+  }
+
+  /* Карт — бүх дэлгэц дээр ижил өндөр, ижил ирмэг */
+  .zity-card {
+    background-color: var(--zity-surface);
+    border: 1px solid var(--zity-border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--zity-shadow-card);
+  }
+
+  /* Форм талбар */
+  .zity-input {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--zity-border);
+    background-color: var(--zity-surface-hover);
+    color: var(--zity-text-main);
+    padding: 0.625rem 0.75rem;
+    font-size: 0.8125rem;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .zity-input::placeholder {
+    color: var(--zity-text-subtle);
+  }
+  .zity-input:focus {
+    border-color: var(--zity-primary);
+    box-shadow: 0 0 0 3px var(--zity-primary-light);
+  }
+  .zity-input[aria-invalid='true'] {
+    border-color: var(--zity-danger);
   }
 }
 
@@ -70,18 +242,24 @@
     display: none;
   }
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
   }
   .shadow-xs {
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    box-shadow: var(--zity-shadow-card);
   }
 
-  /* Smooth page transitions */
   .animate-in {
-    animation: fade-in 0.2s ease-out forwards;
+    animation: zity-fade-in 0.2s ease-out forwards;
   }
 
-  @keyframes fade-in {
+  .animate-slide-up {
+    animation: zity-slide-up 0.25s ease-out forwards;
+  }
+
+  @keyframes zity-fade-in {
     from {
       opacity: 0;
       transform: translateY(8px);
@@ -89,6 +267,17 @@
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+
+  @keyframes zity-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
     }
   }
 }

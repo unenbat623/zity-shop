@@ -1,0 +1,26 @@
+<svg viewBox="0 0 64 64" width="64" height="64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zity">
+  <defs>
+    <linearGradient id="zity-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="55%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#0D9488"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="18" fill="url(#zity-grad)"/>
+
+  <!-- Тогоочийн малгай: бөмбөлөг ба ирмэг нэг цул хэлбэр.
+       Ирмэг нь бөмбөлгөөс нарийн тул малгайн дүрс тод танигдана. -->
+  <g fill="#FFFFFF">
+    <circle cx="23" cy="17" r="6.5"/>
+    <circle cx="41" cy="17" r="6.5"/>
+    <circle cx="32" cy="13.5" r="8"/>
+    <rect x="22" y="18" width="20" height="8" rx="3"/>
+  </g>
+
+  <!-- Z үсэг — тэмдгийн гол элемент, жижиг хэмжээнд ч уншигдана -->
+  <path d="M22 30.5h20a1.6 1.6 0 0 1 1.24 2.6L29.4 49.2h12.6a1.6 1.6 0 0 1 1.6 1.6v2a1.6 1.6 0 0 1-1.6 1.6H22a1.6 1.6 0 0 1-1.24-2.6L34.6 35.4H22a1.6 1.6 0 0 1-1.6-1.6v-1.7A1.6 1.6 0 0 1 22 30.5z" fill="#FFFFFF"/>
+
+  <!-- Шинэхэн байдлын навч — Z-тэй огтлолцохгүй, баруун доод буланд -->
+  <path d="M55 39.5c0 5.8-4.3 10.2-10 10.2 0-5.8 4.3-10.2 10-10.2z" fill="#FCD34D"/>
+</svg>

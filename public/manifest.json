@@ -1,28 +1,61 @@
 {
   "name": "Zity Shop — Хоол & Хүнсний Хүргэлт",
   "short_name": "Zity Shop",
-  "description": "Zity Chef & Odoo ERP-тэй холбогдсон Монголын тэргүүний хүнсний хүргэлтийн платформ",
+  "description": "Zity Chef & Odoo ERP-тэй холбогдсон хүнсний хүргэлтийн платформ",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
   "background_color": "#0B0F17",
-  "theme_color": "#0B0F17",
+  "theme_color": "#10B981",
   "orientation": "portrait-primary",
   "lang": "mn",
+  "dir": "ltr",
   "scope": "/",
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
-  "categories": ["food", "shopping", "lifestyle"],
-  "screenshots": []
+  "shortcuts": [
+    {
+      "name": "Орц багцууд",
+      "short_name": "Орц багц",
+      "url": "/recipe-kits",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Миний сагс",
+      "short_name": "Сагс",
+      "url": "/cart",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Захиалгууд",
+      "short_name": "Захиалга",
+      "url": "/orders",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["food", "shopping", "lifestyle"]
 }

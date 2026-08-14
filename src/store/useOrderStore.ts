@@ -1,156 +1,312 @@
 import { create } from 'zustand';
-import { Order, CartItem, DeliveryAddress, DeliveryMode, PaymentMethod } from '../types';
+import { persist } from 'zustand/middleware';
+import {
+  CartItem,
+  DeliveryAddress,
+  DeliveryMode,
+  Order,
+  OrderStatus,
+  PaymentMethod,
+} from '../types';
 import { odooService } from '../services/odooService';
 import { ZityChefService } from '../services/zityChefService';
+import { useAuthStore } from './useAuthStore';
+
+/**
+ * Захиалгын төлөв.
+ *
+ * Захиалга үүсэх нь гадаад системээс хамаарахгүй: эхлээд локал захиалга үүсээд,
+ * дараа нь Odoo болон Zity Chef рүү синк хийгдэнэ. Синк амжилтгүй болбол
+ * захиалга алдагдахгүй, зөвхөн `odooSync` / `chefSync` төлөв "failed" болно
+ * бөгөөд дахин оролдох боломжтой.
+ */
+
+/** Захиалгын явцын симуляц — захиалга үүссэнээс хойших хугацаа (ms) */
+const PROGRESS_TIMELINE: { status: OrderStatus; afterMs: number }[] = [
+  { status: 'packing', afterMs: 30_000 },
+  { status: 'shipping', afterMs: 120_000 },
+  { status: 'delivered', afterMs: 420_000 },
+];
+
+const STATUS_ORDER: OrderStatus[] = ['pending', 'odoo_synced', 'packing', 'shipping', 'delivered'];
+
+/** Захиалгын дүнгийн 1%-ийг Zity Point болгож олгоно */
+const POINTS_RATE = 0.01;
+
+export interface CreateOrderInput {
+  items: CartItem[];
+  deliveryMode: DeliveryMode;
+  address: DeliveryAddress;
+  pickupTime: string | null;
+  paymentMethod: PaymentMethod;
+  subtotal: number;
+  discountAmount: number;
+  deliveryFee: number;
+  totalAmount: number;
+  couponCode?: string;
+}
 
 interface OrderState {
   orders: Order[];
-  activeOrder: Order | null;
-  createOrder: (
-    items: CartItem[],
-    deliveryMode: DeliveryMode,
-    address: DeliveryAddress,
-    pickupTime: string | null,
-    paymentMethod: PaymentMethod,
-    subtotal: number,
-    discountAmount: number,
-    deliveryFee: number,
-    totalAmount: number
-  ) => Promise<Order>;
+  isCreating: boolean;
+
+  createOrder: (input: CreateOrderInput) => Promise<Order>;
   getOrderById: (id: string) => Order | undefined;
-  updateOrderStatus: (id: string, status: Order['status']) => void;
+  updateOrderStatus: (id: string, status: OrderStatus) => void;
+  cancelOrder: (id: string) => { ok: boolean; message: string };
+  /** Синк амжилтгүй болсон захиалгыг дахин илгээх */
+  retrySync: (id: string) => Promise<void>;
+  /** Захиалгын явцыг автоматаар ахиулна. Цэвэрлэх функц буцаана. */
+  startTracking: () => () => void;
+  /** Одоогийн хэрэглэгчийн захиалгууд (зочин үед локал захиалгууд) */
+  getVisibleOrders: (userId: string | null) => Order[];
 }
 
-export const useOrderStore = create<OrderState>((set, get) => ({
-  orders: [
-    {
-      id: 'ORD-2026-001',
-      odooOrderRef: 'SO-2026-8819',
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      items: [
-        {
-          id: 'p1',
-          sku: 'ODOO-MEAT-001',
-          name: 'Үхрийн цул мах (1кг)',
-          price: 17500,
-          image: 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=600&q=80',
-          category: 'Мах, махан бүтээгдэхүүн',
-          categorySlug: 'meat',
-          description: 'Шинэхэн монгол үхрийн цул мах.',
-          stock: 45,
-          unit: 'кг',
-          quantity: 1,
-        },
-        {
-          id: 'p4',
-          sku: 'ODOO-VEG-001',
-          name: 'Монгол төмс (1кг)',
-          price: 1500,
-          image: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=600&q=80',
-          category: 'Хүнсний ногоо',
-          categorySlug: 'vegetables',
-          description: 'Шинэ ургацын Монгол хөрсний төмс.',
-          stock: 200,
-          unit: 'кг',
-          quantity: 2,
-        },
-      ],
-      deliveryMode: 'delivery',
-      address: {
-        district: 'Сүхбаатар дүүрэг',
-        khoroo: '1-р хороо',
-        streetBuilding: 'Zity Center, 402 тоот',
-        entranceAppt: '2-р орц',
-        phone: '99112233',
-        notes: 'Үүдэнд үлдээнэ үү',
+function createOrderId(): string {
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+  const unique = now.getTime().toString(36).slice(-4).toUpperCase();
+  return `ORD-${stamp}-${unique}`;
+}
+
+function statusRank(status: OrderStatus): number {
+  const index = STATUS_ORDER.indexOf(status);
+  return index === -1 ? -1 : index;
+}
+
+export const useOrderStore = create<OrderState>()(
+  persist(
+    (set, get) => ({
+      orders: [],
+      isCreating: false,
+
+      createOrder: async (input) => {
+        set({ isCreating: true });
+
+        const account = useAuthStore.getState().account;
+        const orderId = createOrderId();
+
+        const newOrder: Order = {
+          id: orderId,
+          odooOrderRef: '—',
+          createdAt: new Date().toISOString(),
+          userId: account?.id ?? null,
+          items: input.items,
+          deliveryMode: input.deliveryMode,
+          address: input.address,
+          pickupTime: input.pickupTime || undefined,
+          paymentMethod: input.paymentMethod,
+          // Бэлнээр төлөх захиалга хүргэгдэх хүртэл төлөгдөөгүй хэвээр
+          paymentStatus: input.paymentMethod === 'cod' ? 'unpaid' : 'paid',
+          subtotal: input.subtotal,
+          discountAmount: input.discountAmount,
+          deliveryFee: input.deliveryFee,
+          totalAmount: input.totalAmount,
+          couponCode: input.couponCode,
+          status: 'pending',
+          estimatedDeliveryTime: input.deliveryMode === 'delivery' ? '30-45 минут' : '15-20 минут',
+          odooSync: { status: 'pending' },
+          chefSync: { status: 'pending' },
+        };
+
+        set((state) => ({ orders: [newOrder, ...state.orders] }));
+
+        // Odoo болон Chef рүү зэрэг синк — аль нэг нь унасан ч нөгөө нь үргэлжилнэ
+        const [odooResult, chefResult] = await Promise.allSettled([
+          odooService.pushOrderToOdoo(newOrder),
+          ZityChefService.syncOrder(newOrder),
+        ]);
+
+        const odooSync: Order['odooSync'] =
+          odooResult.status === 'fulfilled' && odooResult.value.success
+            ? {
+                status: 'success',
+                message: `Odoo sale.order үүслээ: ${odooResult.value.odooOrderRef}`,
+                syncedAt: new Date().toISOString(),
+              }
+            : {
+                status: 'failed',
+                message:
+                  odooResult.status === 'rejected'
+                    ? 'Odoo ERP рүү илгээж чадсангүй.'
+                    : 'Odoo ERP захиалга үүсгэсэнгүй.',
+              };
+
+        const chefSync: Order['chefSync'] =
+          chefResult.status === 'fulfilled' && chefResult.value.success
+            ? { status: 'success', message: chefResult.value.message, syncedAt: new Date().toISOString() }
+            : {
+                status: 'failed',
+                message:
+                  chefResult.status === 'fulfilled'
+                    ? chefResult.value.message
+                    : 'Zity Chef рүү илгээж чадсангүй.',
+              };
+
+        const odooOrderRef =
+          odooResult.status === 'fulfilled' && odooResult.value.success
+            ? odooResult.value.odooOrderRef
+            : 'Синк амжилтгүй';
+
+        set((state) => ({
+          isCreating: false,
+          orders: state.orders.map((order) =>
+            order.id === orderId
+              ? {
+                  ...order,
+                  odooOrderRef,
+                  odooSync,
+                  chefSync,
+                  status: odooSync.status === 'success' ? 'odoo_synced' : 'pending',
+                }
+              : order
+          ),
+        }));
+
+        // Zity Point олгоно (зөвхөн нэвтэрсэн хэрэглэгчид)
+        if (account) {
+          useAuthStore.getState().addPoints(Math.round(input.totalAmount * POINTS_RATE));
+        }
+
+        return get().getOrderById(orderId) ?? newOrder;
       },
-      paymentMethod: 'qpay',
-      paymentStatus: 'paid',
-      subtotal: 20500,
-      discountAmount: 0,
-      deliveryFee: 3000,
-      totalAmount: 23500,
-      status: 'delivered',
-      estimatedDeliveryTime: 'Хүргэгдсэн',
-    },
-  ],
-  activeOrder: null,
 
-  createOrder: async (
-    items,
-    deliveryMode,
-    address,
-    pickupTime,
-    paymentMethod,
-    subtotal,
-    discountAmount,
-    deliveryFee,
-    totalAmount
-  ) => {
-    const orderId = `ORD-2026-${Math.floor(100 + Math.random() * 900)}`;
+      getOrderById: (id) => get().orders.find((order) => order.id === id),
 
-    const newOrder: Order = {
-      id: orderId,
-      odooOrderRef: 'Бүртгэж байна...',
-      createdAt: new Date().toISOString(),
-      items,
-      deliveryMode,
-      address,
-      pickupTime: pickupTime || undefined,
-      paymentMethod,
-      paymentStatus: 'paid',
-      subtotal,
-      discountAmount,
-      deliveryFee,
-      totalAmount,
-      status: 'pending',
-      estimatedDeliveryTime: deliveryMode === 'delivery' ? '30-45 минут' : '15-20 минут',
-    };
+      updateOrderStatus: (id, status) => {
+        set((state) => ({
+          orders: state.orders.map((order) => {
+            if (order.id !== id) return order;
+            return {
+              ...order,
+              status,
+              // Бэлнээр төлөх захиалга хүргэгдсэн үед төлөгдсөнд тооцогдоно
+              paymentStatus:
+                status === 'delivered' && order.paymentMethod === 'cod' ? 'paid' : order.paymentStatus,
+              estimatedDeliveryTime: status === 'delivered' ? 'Хүргэгдсэн' : order.estimatedDeliveryTime,
+            };
+          }),
+        }));
+      },
 
-    set((state) => ({
-      orders: [newOrder, ...state.orders],
-      activeOrder: newOrder,
-    }));
+      cancelOrder: (id) => {
+        const order = get().getOrderById(id);
+        if (!order) return { ok: false, message: 'Захиалга олдсонгүй.' };
 
-    // 1. Send order to Odoo ERP
-    const odooResult = await odooService.pushOrderToOdoo(newOrder);
+        if (order.status === 'delivered') {
+          return { ok: false, message: 'Хүргэгдсэн захиалгыг цуцлах боломжгүй.' };
+        }
+        if (order.status === 'cancelled') {
+          return { ok: false, message: 'Захиалга аль хэдийн цуцлагдсан байна.' };
+        }
+        if (order.status === 'shipping') {
+          return { ok: false, message: 'Хүргэлтэд гарсан захиалгыг цуцлах боломжгүй. Оператортой холбогдоно уу.' };
+        }
 
-    // 2. Sync Order & add ingredients into Zity Chef ecosystem / fridge
-    await ZityChefService.syncOrderToZityChef(newOrder);
+        set((state) => ({
+          orders: state.orders.map((item) =>
+            item.id === id ? { ...item, status: 'cancelled' as OrderStatus } : item
+          ),
+        }));
+        return { ok: true, message: `${id} захиалга цуцлагдлаа.` };
+      },
 
-    // Update order with real Odoo Order Ref & change status to odoo_synced
-    set((state) => ({
-      orders: state.orders.map((ord) =>
-        ord.id === orderId
-          ? { ...ord, odooOrderRef: odooResult.odooOrderRef, status: 'odoo_synced' }
-          : ord
-      ),
-      activeOrder:
-        state.activeOrder?.id === orderId
-          ? { ...state.activeOrder, odooOrderRef: odooResult.odooOrderRef, status: 'odoo_synced' }
-          : state.activeOrder,
-    }));
+      retrySync: async (id) => {
+        const order = get().getOrderById(id);
+        if (!order) return;
 
-    // Simulate progression to packing -> shipping
-    setTimeout(() => {
-      get().updateOrderStatus(orderId, 'packing');
-    }, 4000);
+        const tasks: Promise<void>[] = [];
 
-    setTimeout(() => {
-      get().updateOrderStatus(orderId, 'shipping');
-    }, 12000);
+        if (order.odooSync.status === 'failed') {
+          tasks.push(
+            odooService
+              .pushOrderToOdoo(order)
+              .then((result) => {
+                set((state) => ({
+                  orders: state.orders.map((item) =>
+                    item.id === id
+                      ? {
+                          ...item,
+                          odooOrderRef: result.odooOrderRef,
+                          odooSync: {
+                            status: 'success',
+                            message: `Odoo sale.order үүслээ: ${result.odooOrderRef}`,
+                            syncedAt: new Date().toISOString(),
+                          },
+                          status: statusRank(item.status) < 1 ? 'odoo_synced' : item.status,
+                        }
+                      : item
+                  ),
+                }));
+              })
+              .catch(() => undefined)
+          );
+        }
 
-    return newOrder;
-  },
+        if (order.chefSync.status === 'failed') {
+          tasks.push(
+            ZityChefService.syncOrder(order).then((result) => {
+              set((state) => ({
+                orders: state.orders.map((item) =>
+                  item.id === id
+                    ? {
+                        ...item,
+                        chefSync: {
+                          status: result.success ? 'success' : 'failed',
+                          message: result.message,
+                          syncedAt: result.success ? new Date().toISOString() : undefined,
+                        },
+                      }
+                    : item
+                ),
+              }));
+            })
+          );
+        }
 
-  getOrderById: (id: string) => {
-    return get().orders.find((order) => order.id === id);
-  },
+        await Promise.allSettled(tasks);
+      },
 
-  updateOrderStatus: (id: string, status: Order['status']) => {
-    set((state) => ({
-      orders: state.orders.map((ord) => (ord.id === id ? { ...ord, status } : ord)),
-      activeOrder: state.activeOrder?.id === id ? { ...state.activeOrder, status } : state.activeOrder,
-    }));
-  },
-}));
+      /**
+       * Захиалгын явцыг нэг interval-аар ахиулна.
+       *
+       * Өмнөх хувилбар захиалга бүрт `setTimeout` үүсгэдэг байсан — хуудас сэргээхэд
+       * захиалга "packing" төлөвт царцдаг, timer нь цэвэрлэгддэггүй байв. Одоо явцыг
+       * `createdAt`-аас тооцдог тул reload хийсэн ч зөв үргэлжилнэ.
+       */
+      startTracking: () => {
+        const tick = () => {
+          const now = Date.now();
+
+          get().orders.forEach((order) => {
+            if (order.status === 'cancelled' || order.status === 'delivered') return;
+            // Odoo синк амжилтгүй захиалгыг автоматаар урагшлуулахгүй
+            if (order.odooSync.status !== 'success') return;
+
+            const elapsed = now - new Date(order.createdAt).getTime();
+            const reached = PROGRESS_TIMELINE.filter((step) => elapsed >= step.afterMs);
+            if (reached.length === 0) return;
+
+            const target = reached[reached.length - 1].status;
+            if (statusRank(target) > statusRank(order.status)) {
+              get().updateOrderStatus(order.id, target);
+            }
+          });
+        };
+
+        tick();
+        const intervalId = setInterval(tick, 5_000);
+        return () => clearInterval(intervalId);
+      },
+
+      getVisibleOrders: (userId) =>
+        get().orders.filter((order) => order.userId === userId || order.userId === null),
+    }),
+    {
+      name: 'zity-orders',
+      partialize: (state) => ({ orders: state.orders }),
+    }
+  )
+);

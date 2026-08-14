@@ -1,169 +1,209 @@
-import React, { useEffect, useState } from 'react';
-import { Header } from '../components/Header';
-import { BottomNav } from '../components/BottomNav';
-import { RECIPE_BUNDLES } from '../constants/mockData';
-import { RecipeBundle } from '../types';
+import { useEffect, useState } from 'react';
+import {
+  CheckCircle2,
+  ChefHat,
+  Clock,
+  Layers,
+  RefreshCw,
+  ShoppingBag,
+  Users,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
+
+import { AppShell } from '../components/AppShell';
+import { Skeleton } from '../components/ui/Skeleton';
 import { useCartStore } from '../store/useCartStore';
-import { ZityChefService } from '../services/zityChefService';
-import { ChefHat, Users, CheckCircle2, ShoppingBag, Layers, RefreshCw, Wifi } from 'lucide-react';
+import { useCatalogStore } from '../store/useCatalogStore';
+import { useToastStore } from '../store/useToastStore';
+import { RecipeBundle } from '../types';
+import { formatMnt } from '../lib/format';
 
 export function RecipeKitsScreen() {
-  const { addBundle } = useCartStore();
-  const [addedBundleId, setAddedBundleId] = useState<string | null>(null);
-  const [recipeKits, setRecipeKits] = useState<RecipeBundle[]>(RECIPE_BUNDLES);
-  const [isLive, setIsLive] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const showToast = useToastStore((state) => state.show);
+  const addBundle = useCartStore((state) => state.addBundle);
 
-  const loadRecipeKits = async () => {
-    setIsLoading(true);
-    const result = await ZityChefService.fetchRecipeKits();
-    setRecipeKits(result.bundles);
-    setIsLive(result.isLive);
-    setIsLoading(false);
-  };
+  const { recipeKits, isLoadingKits, connection, loadRecipeKits, loadProducts } = useCatalogStore();
+  const [addedBundleId, setAddedBundleId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Багцын орцыг каталогийн бодит бараатай тааруулахын тулд хоёуланг нь ачаална
     void loadRecipeKits();
-  }, []);
+    void loadProducts();
+  }, [loadRecipeKits, loadProducts]);
 
   const handleAddBundle = (bundle: RecipeBundle) => {
-    addBundle(bundle);
-    setAddedBundleId(bundle.id);
-    setTimeout(() => setAddedBundleId(null), 2000);
+    const result = addBundle(bundle);
+    showToast(result.message, result.ok ? 'success' : 'warning');
+
+    if (result.ok) {
+      setAddedBundleId(bundle.id);
+      setTimeout(() => setAddedBundleId((current) => (current === bundle.id ? null : current)), 2000);
+    }
   };
 
+  const isLive = connection.status === 'live';
+
   return (
-    <div className="min-h-screen bg-background pb-28 text-text-main">
-      <Header />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-        {/* Banner */}
-        <div className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-emerald-500/20">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
-              <ChefHat className="h-4 w-4 text-emerald-400" /> Zity Chef Жор & Орц Багцууд
-            </span>
-            {isLive && (
-              <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-200 border border-emerald-400/30 flex items-center gap-1.5">
-                <Wifi className="h-4 w-4 text-emerald-300 animate-pulse" /> Live
+    <AppShell showSearch={false} title="Орц багцууд" maxWidth="xl">
+        <section className="zity-brand-surface relative mb-6 overflow-hidden rounded-3xl p-6 shadow-xl sm:p-8">
+          <div className="relative z-10">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-200">
+                <ChefHat className="h-4 w-4" /> Zity Chef жор & орц багц
               </span>
-            )}
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white mb-2">Хоолны Орцоо Бэлэн Багцаар Ав</h1>
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-            <p className="text-xs sm:text-sm text-emerald-100/80 leading-relaxed max-w-xl">
-              Гэртээ амттай хоол хийхэд хэрэгтэй бүх шинэхэн орцыг яг таг тунгаар нь бэлтгэж нэг дор хүргэж өгнө.
-            </p>
-            <button
-              onClick={() => void loadRecipeKits()}
-              className="inline-flex w-fit items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 text-xs font-extrabold text-white border border-white/10 hover:bg-white/15"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-              Синк
-            </button>
-          </div>
-        </div>
-
-        {/* Recipe Bundles Responsive Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {recipeKits.map((bundle) => {
-            const isJustAdded = addedBundleId === bundle.id;
-
-            return (
-              <div
-                key={bundle.id}
-                className="overflow-hidden rounded-3xl border border-border bg-surface shadow-xs transition-all hover:border-emerald-500/30 flex flex-col justify-between"
+              <span
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-extrabold ${
+                  isLive
+                    ? 'border-emerald-400/30 bg-emerald-500/20 text-emerald-200'
+                    : 'border-amber-400/30 bg-amber-500/20 text-amber-100'
+                }`}
+                title={connection.message}
               >
-                <div>
-                  {/* Bundle Header Image */}
-                  <div className="relative h-48 w-full bg-surface-hover">
-                    <img src={bundle.image} alt={bundle.name} className="h-full w-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
-                    <div className="absolute top-4 left-4 flex gap-2">
-                      <span className="flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-extrabold text-white shadow-md">
-                        <ChefHat className="h-3.5 w-3.5" /> {bundle.chefName}
-                      </span>
-                      <span className="flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-xs font-bold text-white backdrop-blur-md">
-                        <Users className="h-3.5 w-3.5 text-emerald-400" /> {bundle.servings} Хүний Порц
-                      </span>
-                    </div>
+                {isLive ? <Wifi className="h-3.5 w-3.5 animate-pulse" /> : <WifiOff className="h-3.5 w-3.5" />}
+                {isLive ? 'Live' : 'Локал'}
+              </span>
+            </div>
 
-                    <div className="absolute bottom-4 left-4 right-4 text-white">
-                      <h2 className="text-lg font-bold text-white mb-1">{bundle.name}</h2>
-                      <p className="text-xs text-gray-200 line-clamp-1">{bundle.description}</p>
-                    </div>
+            <h1 className="mb-2 text-2xl font-black text-white sm:text-3xl">
+              Хоолны орцоо бэлэн багцаар ав
+            </h1>
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <p className="max-w-xl text-xs leading-relaxed text-emerald-100/80 sm:text-sm">
+                Гэртээ амттай хоол хийхэд хэрэгтэй бүх шинэхэн орцыг яг таг тунгаар нь бэлтгэж нэг дор хүргэнэ.
+              </p>
+              <button
+                onClick={() => void loadRecipeKits({ force: true })}
+                disabled={isLoadingKits}
+                className="inline-flex w-fit shrink-0 items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-2.5 text-xs font-extrabold text-white transition-colors hover:bg-white/20 disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoadingKits ? 'animate-spin' : ''}`} />
+                Синк
+              </button>
+            </div>
+          </div>
+
+          <ChefHat className="pointer-events-none absolute -bottom-8 -right-8 hidden h-48 w-48 rotate-12 text-white/10 sm:block" />
+        </section>
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {isLoadingKits && recipeKits.length === 0
+            ? Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="zity-card overflow-hidden">
+                  <Skeleton className="h-48 w-full" />
+                  <div className="space-y-3 p-4">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-10 w-full" />
                   </div>
+                </div>
+              ))
+            : recipeKits.map((bundle) => {
+                const isJustAdded = addedBundleId === bundle.id;
 
-                  {/* Ingredients List */}
-                  <div className="p-4 border-b border-border">
-                    <h3 className="text-xs font-extrabold text-text-main mb-3 flex items-center gap-1.5">
-                      <Layers className="h-4 w-4 text-emerald-500" /> Багцад дагалдах орцууд ({bundle.productItems.length}):
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      {bundle.productItems.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between bg-surface-hover p-2.5 rounded-xl border border-border"
-                        >
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                            <span className="font-semibold text-text-main">{item.productName}</span>
-                          </div>
-                          <span className="text-[11px] font-bold text-emerald-600 font-mono">
-                            {item.requiredQty} {item.unit}
+                return (
+                  <article
+                    key={bundle.id}
+                    className="flex flex-col justify-between overflow-hidden rounded-3xl border border-border bg-surface shadow-xs transition-all hover:border-emerald-500/30"
+                  >
+                    <div>
+                      <div className="relative h-48 w-full bg-surface-hover">
+                        <img
+                          src={bundle.image}
+                          alt={bundle.name}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent" />
+
+                        <div className="absolute left-4 top-4 flex flex-wrap gap-2">
+                          <span className="flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-extrabold text-white shadow-md">
+                            <ChefHat className="h-3.5 w-3.5" /> {bundle.chefName}
+                          </span>
+                          <span className="flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-xs font-bold text-white backdrop-blur-md">
+                            <Users className="h-3.5 w-3.5 text-emerald-400" /> {bundle.servings} порц
                           </span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
 
-                {/* Bottom Action Bar */}
-                <div className="p-4 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] text-text-muted font-bold block">Багцын Нийт Үнэ</span>
-                    {bundle.discountPrice ? (
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xl font-extrabold text-emerald-600">
-                          {bundle.discountPrice.toLocaleString()}₮
-                        </span>
-                        <span className="text-xs text-text-muted line-through">
-                          {bundle.price.toLocaleString()}₮
-                        </span>
+                        <div className="absolute bottom-4 left-4 right-4 text-white">
+                          <h2 className="mb-1 text-lg font-bold leading-tight">{bundle.name}</h2>
+                          <p className="line-clamp-1 text-xs text-gray-200">{bundle.description}</p>
+                        </div>
                       </div>
-                    ) : (
-                      <span className="text-xl font-extrabold text-text-main">
-                        {bundle.price.toLocaleString()}₮
-                      </span>
-                    )}
-                  </div>
 
-                  <button
-                    onClick={() => handleAddBundle(bundle)}
-                    className={`flex items-center gap-2 rounded-2xl px-5 py-3 text-xs font-bold text-white transition-all shadow-md active:scale-95 ${
-                      isJustAdded
-                        ? 'bg-emerald-700'
-                        : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
-                    }`}
-                  >
-                    {isJustAdded ? (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 text-white" /> Сагсанд Нэмэгдлээ!
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingBag className="h-4 w-4" /> Бүх Орцыг Сагслах
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+                      <div className="border-b border-border p-4">
+                        <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
+                          <span className="flex items-center gap-1 rounded-lg border border-border bg-surface-hover px-2.5 py-1 font-medium">
+                            <Clock className="h-3.5 w-3.5 text-emerald-500" /> {bundle.prepTime}
+                          </span>
+                          <span className="flex items-center gap-1 rounded-lg border border-border bg-surface-hover px-2.5 py-1 font-medium">
+                            <Layers className="h-3.5 w-3.5 text-amber-500" /> {bundle.productItems.length} орц
+                          </span>
+                        </div>
+
+                        <h3 className="mb-2 text-xs font-extrabold text-text-main">Багцад дагалдах орцууд</h3>
+                        <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                          {bundle.productItems.map((item) => (
+                            <div
+                              key={item.productId}
+                              className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface-hover p-2.5"
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                                <span className="truncate font-semibold text-text-main">
+                                  {item.productName}
+                                </span>
+                              </span>
+                              <span className="shrink-0 font-mono text-[11px] font-bold text-emerald-600">
+                                {item.requiredQty} {item.unit}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 p-4">
+                      <div>
+                        <span className="block text-[10px] font-bold text-text-muted">Багцын үнэ</span>
+                        {bundle.discountPrice ? (
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xl font-extrabold text-emerald-600">
+                              {formatMnt(bundle.discountPrice)}
+                            </span>
+                            <span className="text-xs text-text-subtle line-through">
+                              {formatMnt(bundle.price)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xl font-extrabold text-text-main">
+                            {formatMnt(bundle.price)}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => handleAddBundle(bundle)}
+                        className={`flex shrink-0 items-center gap-2 rounded-2xl px-5 py-3 text-xs font-bold text-white shadow-md transition-all active:scale-95 ${
+                          isJustAdded ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                        }`}
+                      >
+                        {isJustAdded ? (
+                          <>
+                            <CheckCircle2 className="h-4 w-4" /> Нэмэгдлээ
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingBag className="h-4 w-4" /> Бүх орцыг сагслах
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
         </div>
-      </main>
-
-      <BottomNav />
-    </div>
+      </AppShell>
   );
 }

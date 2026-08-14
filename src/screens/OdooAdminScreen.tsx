@@ -1,201 +1,233 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Header } from '../components/Header';
-import { BottomNav } from '../components/BottomNav';
-import { useOdooStore } from '../store/useOdooStore';
-import { useOrderStore } from '../store/useOrderStore';
-import { useAuthStore } from '../store/useAuthStore';
-import { MOCK_PRODUCTS } from '../constants/mockData';
-import { ZityChefService } from '../services/zityChefService';
-import { Product } from '../types';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Database,
-  RefreshCw,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
   Activity,
-  Server,
-  ShieldCheck,
-  Settings,
-  Link,
-  Package,
+  AlertTriangle,
   BarChart3,
-  Mail,
-  Users,
-  ShoppingBag,
-  Send,
-  LockKeyhole,
+  CheckCircle2,
   ChefHat,
+  Database,
+  Info,
+  Link as LinkIcon,
+  Loader2,
+  Lock,
+  Mail,
+  Package,
+  RefreshCw,
+  Server,
+  Settings,
+  ShieldCheck,
+  ShoppingBag,
   Store,
-  Eye,
+  Users,
+  XCircle,
 } from 'lucide-react';
 
-interface AdminUserRow {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  source: 'Zity Chef' | 'Zity Delguur' | 'Both';
-  savedItems: number;
-  orders: number;
-  lastSeen: string;
-}
+import { AppShell } from '../components/AppShell';
+import { useOdooStore } from '../store/useOdooStore';
+import { useOrderStore } from '../store/useOrderStore';
+import { useAuthStore, useUserProfile } from '../store/useAuthStore';
+import { useCatalogStore } from '../store/useCatalogStore';
+import { useToastStore } from '../store/useToastStore';
+import { ChefDashboard, ZityChefService } from '../services/zityChefService';
+import { AdminUserRow, OdooSyncLog } from '../types';
+import { formatMnt, formatNumber, formatTime } from '../lib/format';
+import { env, isAdminRestrictionConfigured } from '../lib/env';
+
+/** Нөөц энэ хэмжээнээс доош орвол анхааруулна */
+const LOW_STOCK_THRESHOLD = 20;
 
 export function OdooAdminScreen() {
-  const { config, logs, isSyncing, testConnection, triggerSync, updateConfig } = useOdooStore();
-  const { orders } = useOrderStore();
-  const { user } = useAuthStore();
+  const showToast = useToastStore((state) => state.show);
+
+  const { config, logs, mode, isSyncing, isTesting, lastResult, testConnection, triggerSync, updateConfig } =
+    useOdooStore();
+  const orders = useOrderStore((state) => state.orders);
+  const account = useAuthStore((state) => state.account);
+  const profile = useUserProfile();
+
+  const { products, connection, isLoadingProducts, loadProducts } = useCatalogStore();
+
   const [isEditing, setIsEditing] = useState(false);
   const [editUrl, setEditUrl] = useState(config.url);
   const [editDb, setEditDb] = useState(config.db);
-  const [editApiKey, setEditApiKey] = useState(config.apiKey);
   const [editUsername, setEditUsername] = useState(config.username);
-  const [testResult, setTestResult] = useState<string | null>(null);
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
-  const [isChefLive, setIsChefLive] = useState(false);
-  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
-  const [smtpPort, setSmtpPort] = useState('587');
-  const [smtpUser, setSmtpUser] = useState('admin@zity.mn');
-  const [smtpPassword, setSmtpPassword] = useState('');
-  const [smtpFromName, setSmtpFromName] = useState('Zity Delguur');
-  const [smtpResult, setSmtpResult] = useState<string | null>(null);
+
+  const [dashboard, setDashboard] = useState<ChefDashboard | null>(null);
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    void loadProducts();
+  }, [loadProducts]);
 
-    async function loadProducts() {
-      const result = await ZityChefService.fetchStoreProducts();
-      if (isMounted) {
-        setProducts(result.products);
-        setIsChefLive(result.isLive);
-      }
+  // Chef backend-ийн нэгдсэн dashboard (хэрэглэгч, захиалга, орлого)
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadDashboard() {
+      setIsLoadingDashboard(true);
+      const result = await ZityChefService.fetchDashboard(controller.signal);
+      if (controller.signal.aborted) return;
+
+      setDashboard(result.data);
+      setDashboardError(
+        result.isLive
+          ? result.data.adminEnabled
+            ? null
+            : result.data.message || 'Chef backend дээр admin эрх аваагүй байна.'
+          : result.error
+      );
+      setIsLoadingDashboard(false);
     }
 
-    void loadProducts();
-
-    return () => {
-      isMounted = false;
-    };
+    void loadDashboard();
+    return () => controller.abort();
   }, []);
 
-  const registeredUsers = useMemo<AdminUserRow[]>(
-    () => [
-      {
-        id: 'u-current',
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        source: user.isZityChefConnected ? 'Both' : 'Zity Delguur',
-        savedItems: 6,
-        orders: orders.length,
-        lastSeen: 'Одоо идэвхтэй',
-      },
-      {
-        id: 'u-chef-1',
-        name: 'Chef Zity Demo',
-        email: 'chef@zity.mn',
-        phone: '99001122',
-        source: 'Zity Chef',
-        savedItems: 12,
-        orders: 3,
-        lastSeen: 'Өнөөдөр',
-      },
-      {
-        id: 'u-shop-1',
-        name: 'Delguur Customer',
-        email: 'customer@zity.mn',
-        phone: '88002233',
-        source: 'Zity Delguur',
-        savedItems: 4,
-        orders: 1,
-        lastSeen: 'Өчигдөр',
-      },
-    ],
-    [orders.length, user.email, user.isZityChefConnected, user.name, user.phone]
-  );
+  /** Chef backend-ийн хэрэглэгчид + одоо нэвтэрсэн Delguur хэрэглэгч */
+  const users = useMemo<AdminUserRow[]>(() => {
+    const chefUsers = dashboard?.users ?? [];
+    if (!account) return chefUsers;
 
-  const paidRevenue = orders
+    const currentUserOrders = orders.filter((order) => order.userId === account.id).length;
+    const currentRow: AdminUserRow = {
+      id: account.id,
+      name: profile.name,
+      email: profile.email,
+      phone: profile.phone || '—',
+      source: chefUsers.some((user) => user.email === profile.email) ? 'Both' : 'Zity Delguur',
+      savedItems: profile.addresses.length,
+      orders: currentUserOrders,
+      lastSeen: 'Одоо идэвхтэй',
+    };
+
+    return [currentRow, ...chefUsers.filter((user) => user.email !== profile.email)];
+  }, [account, dashboard, orders, profile]);
+
+  const localRevenue = orders
     .filter((order) => order.paymentStatus === 'paid')
     .reduce((sum, order) => sum + order.totalAmount, 0);
 
-  const lowStockProducts = products.filter((product) => product.stock <= 50).length;
+  // Chef backend live байвал түүний бодит тоог, эс бөгөөс локал тоог харуулна
+  const isChefDashboardLive = dashboard?.adminEnabled === true;
+  const totalUsers = isChefDashboardLive ? dashboard.stats.customers : users.length;
+  const totalOrders = isChefDashboardLive ? dashboard.stats.orders : orders.length;
+  const paidRevenue = isChefDashboardLive ? dashboard.stats.revenue : localRevenue;
+
+  const lowStockCount = products.filter((product) => product.stock <= LOW_STOCK_THRESHOLD).length;
+  const failedSyncCount = orders.filter(
+    (order) => order.odooSync.status === 'failed' || order.chefSync.status === 'failed'
+  ).length;
 
   const handleTestConnection = async () => {
-    setTestResult(null);
     const success = await testConnection();
-    setTestResult(success ? 'Odoo ERP-тэй амжилттай холбогдлоо.' : 'Холболт амжилтгүй болсон. Тохиргоогоо шалгана уу.');
+    showToast(
+      success ? 'Odoo bridge холбогдлоо.' : 'Odoo bridge олдсонгүй — симуляц горимд ажиллана.',
+      success ? 'success' : 'warning'
+    );
   };
 
-  const handleSave = async () => {
-    await updateConfig({
-      url: editUrl,
-      db: editDb,
-      apiKey: editApiKey,
-      username: editUsername,
-    });
-    setIsEditing(false);
+  const handleSync = async () => {
+    await triggerSync();
+    showToast('Синхрончлол дууслаа.', 'success');
   };
 
-  const handleSmtpTest = () => {
-    if (!smtpUser || !smtpPassword) {
-      setSmtpResult('Gmail имэйл болон App Password оруулна уу.');
+  const handleSaveConfig = () => {
+    if (!/^https?:\/\/.+/.test(editUrl.trim())) {
+      showToast('Odoo URL нь http:// эсвэл https:// -ээр эхлэх ёстой.', 'warning');
       return;
     }
-
-    setSmtpResult(`${smtpHost}:${smtpPort} тохиргоо хадгалагдлаа. Туршилтын имэйл илгээхэд бэлэн.`);
+    updateConfig({ url: editUrl.trim(), db: editDb.trim(), username: editUsername.trim() });
+    setIsEditing(false);
+    showToast('Odoo endpoint тохиргоо шинэчлэгдлээ.', 'success');
   };
 
-  const statusIcon = (status: 'success' | 'warning' | 'error') => {
-    if (status === 'success') return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />;
-    if (status === 'warning') return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />;
-    return <XCircle className="h-4 w-4 text-red-500 shrink-0" />;
+  const statusIcon = (status: OdooSyncLog['status']) => {
+    if (status === 'success') return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />;
+    if (status === 'warning') return <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />;
+    return <XCircle className="h-4 w-4 shrink-0 text-red-500" />;
   };
 
   return (
-    <div className="min-h-screen bg-background pb-28 text-text-main">
-      <Header />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-5">
-        {/* Page Title */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-2">
+    <AppShell showSearch={false} title="Admin dashboard" maxWidth="xl">
+      <div className="space-y-5">
+        {/* Гарчиг */}
+        <div className="mb-2 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-xl font-extrabold text-text-main flex items-center gap-2">
-              <Database className="h-5 w-5 text-emerald-500" /> Admin Dashboard
+            <h1 className="flex items-center gap-2 text-xl font-extrabold text-text-main">
+              <Database className="h-5 w-5 text-emerald-500" /> Admin dashboard
             </h1>
             <p className="text-xs text-text-muted">
-              Zity Chef + Zity Delguur хэрэглэгч, бараа, захиалга, Odoo ERP, Google SMTP нэг дор.
+              Zity Chef + Zity Delguur хэрэглэгч, бараа, захиалга, Odoo ERP холболт нэг дор.
             </p>
           </div>
+
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={triggerSync}
-              disabled={isSyncing}
-              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-extrabold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-50"
-            >
+            <button onClick={() => void handleSync()} disabled={isSyncing} className="zity-btn-primary px-4 py-2.5 text-xs">
               <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              Odoo Sync
+              {isSyncing ? 'Синк хийж байна...' : 'Синк хийх'}
             </button>
             <button
-              onClick={handleTestConnection}
-              disabled={isSyncing}
-              className="inline-flex items-center gap-2 rounded-2xl bg-surface px-4 py-2.5 text-xs font-extrabold text-text-main border border-border hover:bg-surface-hover disabled:opacity-50"
+              onClick={() => void handleTestConnection()}
+              disabled={isTesting}
+              className="zity-btn-secondary px-4 py-2.5 text-xs"
             >
-              <Activity className="h-4 w-4 text-emerald-500" />
+              {isTesting ? (
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+              ) : (
+                <Activity className="h-4 w-4 text-emerald-500" />
+              )}
               Холболт тест
             </button>
           </div>
         </div>
 
-        {/* KPI Overview */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {/* Admin эрх хязгаарлаагүй үеийн анхааруулга */}
+        {!isAdminRestrictionConfigured() && (
+          <div className="flex gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-600">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              <span className="font-mono font-bold">VITE_ADMIN_EMAILS</span> тохируулаагүй тул нэвтэрсэн дурын
+              хэрэглэгч энэ хуудсыг үзэж чадна. Production дээр заавал admin имэйлүүдээ жагсаана уу.
+            </span>
+          </div>
+        )}
+
+        {/* KPI */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           {[
-            { label: 'Хэрэглэгчид', value: registeredUsers.length, icon: Users, hint: 'Chef + Delguur' },
-            { label: 'Бараа', value: products.length, icon: Package, hint: isChefLive ? 'Chef live' : 'Fallback data' },
-            { label: 'Захиалга', value: orders.length, icon: ShoppingBag, hint: 'Odoo sale.order' },
-            { label: 'Орлого', value: `${paidRevenue.toLocaleString()}₮`, icon: BarChart3, hint: 'Paid orders' },
-            { label: 'Бага нөөц', value: lowStockProducts, icon: AlertTriangle, hint: '≤ 50 stock' },
+            {
+              label: 'Хэрэглэгчид',
+              value: formatNumber(totalUsers),
+              icon: Users,
+              hint: isChefDashboardLive ? 'Chef DB' : 'Локал',
+            },
+            {
+              label: 'Бараа',
+              value: formatNumber(products.length),
+              icon: Package,
+              hint: connection.status === 'live' ? 'Chef live' : 'Локал каталог',
+            },
+            {
+              label: 'Захиалга',
+              value: formatNumber(totalOrders),
+              icon: ShoppingBag,
+              hint: isChefDashboardLive ? `${dashboard.stats.pendingOrders} хүлээгдэж` : 'Локал',
+            },
+            {
+              label: 'Орлого',
+              value: formatMnt(paidRevenue),
+              icon: BarChart3,
+              hint: isChefDashboardLive ? 'Chef DB' : 'Локал',
+            },
+            {
+              label: 'Бага нөөц',
+              value: formatNumber(lowStockCount),
+              icon: AlertTriangle,
+              hint: `≤ ${LOW_STOCK_THRESHOLD}`,
+            },
           ].map(({ label, value, icon: Icon, hint }) => (
-            <div key={label} className="rounded-2xl bg-surface border border-border p-4 shadow-xs">
+            <div key={label} className="zity-card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <Icon className="h-5 w-5 text-emerald-500" />
                 <span className="text-[10px] font-bold text-text-muted">{hint}</span>
@@ -206,170 +238,184 @@ export function OdooAdminScreen() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
-          <section className="xl:col-span-4 space-y-5">
-            {/* Connection Status Card */}
-            <div className="rounded-3xl bg-surface border border-border shadow-xs overflow-hidden">
-              <div className="px-4 py-3 bg-gradient-to-r from-emerald-900/80 to-teal-900/80 flex items-center justify-between border-b border-border">
-                <div className="flex items-center gap-2">
-                  <Server className="h-4 w-4 text-emerald-400" />
-                  <span className="text-sm font-extrabold text-white">Odoo ERP Сервер</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs">
-                  <span className={`h-2 w-2 rounded-full ${config.isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                  <span className={`font-bold ${config.isConnected ? 'text-emerald-300' : 'text-red-300'}`}>
-                    {config.isConnected ? 'ОНЛАЙН' : 'ОФЛАЙН'}
+        {failedSyncCount > 0 && (
+          <div className="flex items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-[11px] font-bold text-red-500">
+            <XCircle className="h-4 w-4 shrink-0" />
+            {failedSyncCount} захиалгын синк амжилтгүй болсон байна. Захиалгын дэлгэрэнгүй хэсгээс дахин
+            илгээнэ үү.
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+          <section className="space-y-5 xl:col-span-4">
+            {/* Холболтын төлөв */}
+            <div className="zity-card overflow-hidden">
+              <div className="zity-brand-surface flex items-center justify-between border-b border-border px-4 py-3">
+                <span className="flex items-center gap-2">
+                  <Server className="h-4 w-4 text-emerald-300" />
+                  <span className="text-sm font-extrabold text-white">Odoo ERP</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-xs">
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      config.isConnected ? 'animate-pulse bg-emerald-400' : 'bg-amber-400'
+                    }`}
+                  />
+                  <span className={`font-bold ${config.isConnected ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {config.isConnected ? 'BRIDGE' : 'СИМУЛЯЦ'}
                   </span>
-                </div>
+                </span>
               </div>
 
-              <div className="p-4 space-y-3">
+              <div className="space-y-3 p-4">
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {[
-                    { label: 'Сервер URL', value: config.url, icon: Link },
+                    { label: 'Сервер URL', value: config.url, icon: LinkIcon },
                     { label: 'Датабэйс', value: config.db, icon: Database },
                     { label: 'Хэрэглэгч', value: config.username, icon: ShieldCheck },
-                    {
-                      label: 'Сүүлийн синк',
-                      value: config.lastSyncTime
-                        ? new Date(config.lastSyncTime).toLocaleTimeString('mn-MN')
-                        : '—',
-                      icon: RefreshCw,
-                    },
+                    { label: 'Сүүлийн синк', value: formatTime(config.lastSyncTime), icon: RefreshCw },
                   ].map(({ label, value, icon: Icon }) => (
-                    <div key={label} className="rounded-2xl bg-surface-hover p-2.5 border border-border">
-                      <div className="flex items-center gap-1 mb-1">
+                    <div key={label} className="rounded-2xl border border-border bg-surface-hover p-2.5">
+                      <div className="mb-1 flex items-center gap-1">
                         <Icon className="h-3 w-3 text-emerald-500" />
-                        <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider">{label}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-text-muted">
+                          {label}
+                        </span>
                       </div>
-                      <p className="font-mono text-[11px] font-bold text-text-main truncate">{value}</p>
+                      <p className="truncate font-mono text-[11px] font-bold text-text-main">{value}</p>
                     </div>
                   ))}
                 </div>
 
-                {testResult && (
-                  <div className="rounded-2xl px-3 py-2 text-xs font-bold border bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                    {testResult}
+                {lastResult && (
+                  <div
+                    className={`rounded-2xl border px-3 py-2 text-xs font-bold ${
+                      lastResult.ok
+                        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600'
+                        : 'border-amber-500/20 bg-amber-500/10 text-amber-600'
+                    }`}
+                  >
+                    {lastResult.message}
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={handleTestConnection}
-                    disabled={isSyncing}
-                    className="flex items-center justify-center gap-1.5 rounded-2xl bg-surface-hover py-2.5 text-[11px] font-bold text-text-main border border-border hover:bg-border active:scale-95 transition-all disabled:opacity-50"
-                  >
-                    <Activity className="h-3.5 w-3.5 text-emerald-500" /> Тест
-                  </button>
-                  <button
-                    onClick={triggerSync}
-                    disabled={isSyncing}
-                    className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-600 py-2.5 text-[11px] font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50"
-                  >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                    {isSyncing ? 'Синк...' : 'Синк'}
-                  </button>
-                  <button
-                    onClick={() => setIsEditing(!isEditing)}
-                    className="flex items-center justify-center gap-1.5 rounded-2xl bg-surface-hover py-2.5 text-[11px] font-bold text-text-main border border-border hover:bg-border active:scale-95 transition-all"
-                  >
-                    <Settings className="h-3.5 w-3.5 text-text-muted" /> Засах
-                  </button>
-                </div>
+                {mode === 'simulated' && (
+                  <div className="flex gap-2 rounded-2xl border border-border bg-surface-hover p-3 text-[11px] leading-relaxed text-text-muted">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    <span>
+                      Odoo руу browser-оос шууд хандах боломжгүй (CORS + нууц түлхүүр ил гарна). Backend дээр{' '}
+                      <span className="font-mono font-bold">/api/odoo/status</span>,{' '}
+                      <span className="font-mono font-bold">/api/odoo/products</span>,{' '}
+                      <span className="font-mono font-bold">/api/odoo/orders</span> proxy нэмэхэд энэ хэсэг
+                      автоматаар live болно.
+                    </span>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setIsEditing((prev) => !prev)}
+                  className="zity-btn-secondary w-full py-2.5 text-[11px]"
+                >
+                  <Settings className="h-3.5 w-3.5 text-text-muted" />
+                  {isEditing ? 'Засварыг хаах' : 'Endpoint засах'}
+                </button>
               </div>
             </div>
 
-            {/* Configuration Edit Panel */}
+            {/* Endpoint засвар */}
             {isEditing && (
-              <div className="rounded-3xl bg-surface border border-amber-500/30 shadow-xs p-4 space-y-3">
-                <h3 className="text-xs font-extrabold text-text-main flex items-center gap-2">
-                  <Settings className="h-4 w-4 text-amber-500" /> Odoo ERP Тохиргоо
+              <div className="zity-card animate-in space-y-3 p-4">
+                <h3 className="flex items-center gap-2 text-xs font-extrabold text-text-main">
+                  <Settings className="h-4 w-4 text-emerald-500" /> Odoo endpoint тохиргоо
                 </h3>
 
                 {[
-                  { label: 'Odoo URL', value: editUrl, setter: setEditUrl, placeholder: 'https://odoo.company.mn' },
-                  { label: 'Датабэйс нэр', value: editDb, setter: setEditDb, placeholder: 'zity_prod_db' },
-                  { label: 'Admin хэрэглэгч', value: editUsername, setter: setEditUsername, placeholder: 'admin@company.mn' },
-                  { label: 'API Key', value: editApiKey, setter: setEditApiKey, placeholder: 'odoo_api_key_xxxxx', isSecret: true },
-                ].map(({ label, value, setter, placeholder, isSecret }) => (
+                  { label: 'Odoo URL', value: editUrl, setter: setEditUrl, placeholder: 'https://odoo.zity.mn' },
+                  { label: 'Датабэйс нэр', value: editDb, setter: setEditDb, placeholder: 'zity_delguur_db' },
+                  {
+                    label: 'Admin хэрэглэгч',
+                    value: editUsername,
+                    setter: setEditUsername,
+                    placeholder: 'api_admin@zity.mn',
+                  },
+                ].map(({ label, value, setter, placeholder }) => (
                   <div key={label}>
-                    <label className="text-[10px] font-bold text-text-muted block mb-1">{label}</label>
+                    <label className="mb-1 block text-[10px] font-bold text-text-muted">{label}</label>
                     <input
-                      type={isSecret ? 'password' : 'text'}
                       value={value}
-                      onChange={(e) => setter(e.target.value)}
+                      onChange={(event) => setter(event.target.value)}
                       placeholder={placeholder}
-                      className="w-full rounded-xl border border-border bg-surface-hover px-3 py-2 text-xs font-mono font-medium text-text-main outline-none focus:border-emerald-500"
+                      className="zity-input font-mono"
                     />
                   </div>
                 ))}
 
-                <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-3 text-[11px] text-text-muted">
-                  API key-г Odoo дээрээс Settings &gt; Technical &gt; API Keys хэсгээс үүсгээд энд оруулна.
+                <div className="flex gap-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-600">
+                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Odoo API key энд оруулахгүй. Түлхүүр нь backend-ийн env дээр байх ёстой — browser-т орсон
+                    түлхүүрийг хэн ч харах боломжтой.
+                  </span>
                 </div>
 
-                <div className="flex gap-2 pt-1">
-                  <button onClick={handleSave} className="flex-1 rounded-2xl bg-emerald-600 py-2.5 text-xs font-bold text-white hover:bg-emerald-700">
+                <div className="flex gap-2">
+                  <button onClick={handleSaveConfig} className="zity-btn-primary flex-1 py-2.5 text-xs">
                     Хадгалах
                   </button>
-                  <button onClick={() => setIsEditing(false)} className="flex-1 rounded-2xl bg-surface-hover py-2.5 text-xs font-bold text-text-main border border-border hover:bg-border">
+                  <button onClick={() => setIsEditing(false)} className="zity-btn-secondary flex-1 py-2.5 text-xs">
                     Цуцлах
                   </button>
                 </div>
               </div>
             )}
 
-            {/* SMTP Setup */}
-            <div className="rounded-3xl bg-surface border border-border shadow-xs p-4 space-y-3">
-              <h3 className="text-xs font-extrabold text-text-main flex items-center gap-2">
-                <Mail className="h-4 w-4 text-emerald-500" /> Google SMTP
+            {/* Имэйл (SMTP) — backend-ийн хариуцлага */}
+            <div className="zity-card space-y-3 p-4">
+              <h3 className="flex items-center gap-2 text-xs font-extrabold text-text-main">
+                <Mail className="h-4 w-4 text-emerald-500" /> Имэйл илгээлт (SMTP)
               </h3>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] font-bold text-text-muted block mb-1">SMTP Host</label>
-                  <input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} className="w-full rounded-xl border border-border bg-surface-hover px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-text-muted block mb-1">Port</label>
-                  <input value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} className="w-full rounded-xl border border-border bg-surface-hover px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500" />
-                </div>
+              <div className="rounded-2xl border border-border bg-surface-hover p-3 text-[11px] leading-relaxed text-text-muted">
+                <p className="mb-2 flex items-center gap-1.5 font-bold text-text-main">
+                  <Lock className="h-3.5 w-3.5 text-emerald-500" /> Backend-ээр удирдагдана
+                </p>
+                <p>
+                  Gmail App Password зэрэг SMTP нууц үгийг frontend дээр оруулах, хадгалах боломжгүй — bundle-д
+                  ил гарна. Тохиргоог Chef backend-ийн env дээр хийнэ:
+                </p>
+                <pre className="mt-2 overflow-x-auto rounded-xl bg-surface p-2 font-mono text-[10px] text-text-main">
+{`SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=admin@zity.mn
+SMTP_PASSWORD=<app password>`}
+                </pre>
+                <p className="mt-2">
+                  Дэлгэрэнгүйг <span className="font-mono">docs/chef-backend-env.md</span> файлаас үзнэ үү.
+                </p>
               </div>
-              <div>
-                <label className="text-[10px] font-bold text-text-muted block mb-1">Gmail хэрэглэгч</label>
-                <input value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} className="w-full rounded-xl border border-border bg-surface-hover px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-text-muted block mb-1">Google App Password</label>
-                <div className="relative">
-                  <LockKeyhole className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
-                  <input type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} placeholder="16 оронтой app password" className="w-full rounded-xl border border-border bg-surface-hover pl-9 pr-3 py-2 text-xs font-mono outline-none focus:border-emerald-500" />
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-text-muted block mb-1">From name</label>
-                <input value={smtpFromName} onChange={(e) => setSmtpFromName(e.target.value)} className="w-full rounded-xl border border-border bg-surface-hover px-3 py-2 text-xs outline-none focus:border-emerald-500" />
-              </div>
-              {smtpResult && <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-[11px] font-bold text-emerald-600">{smtpResult}</div>}
-              <button onClick={handleSmtpTest} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-2.5 text-xs font-extrabold text-white hover:bg-emerald-700">
-                <Send className="h-4 w-4" /> SMTP хадгалах / тест
-              </button>
             </div>
 
-            {/* Odoo Module Overview */}
-            <div className="rounded-3xl bg-surface border border-border shadow-xs p-4">
-              <h3 className="text-xs font-extrabold text-text-main mb-3 flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-emerald-500" /> Odoo Модулиуд
+            {/* Модулиуд */}
+            <div className="zity-card p-4">
+              <h3 className="mb-3 flex items-center gap-2 text-xs font-extrabold text-text-main">
+                <BarChart3 className="h-4 w-4 text-emerald-500" /> Odoo модулиуд
               </h3>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {[
-                  { module: 'sale.order', desc: 'Захиалга', active: true },
-                  { module: 'product.product', desc: 'Бараа', active: true },
-                  { module: 'stock.quant', desc: 'Нөөц', active: true },
-                  { module: 'res.partner', desc: 'Хэрэглэгч', active: true },
+                  { module: 'sale.order', desc: 'Захиалга', active: mode === 'bridge' },
+                  { module: 'product.product', desc: 'Бараа', active: mode === 'bridge' },
+                  { module: 'stock.quant', desc: 'Нөөц', active: mode === 'bridge' },
+                  { module: 'res.partner', desc: 'Хэрэглэгч', active: mode === 'bridge' },
                   { module: 'account.move', desc: 'Нэхэмжлэл', active: false },
-                  { module: 'mail.mail', desc: 'SMTP mail', active: !!smtpPassword },
+                  { module: 'mail.mail', desc: 'SMTP mail', active: false },
                 ].map(({ module, desc, active }) => (
-                  <div key={module} className={`rounded-2xl p-2.5 border ${active ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-surface-hover border-border opacity-70'}`}>
+                  <div
+                    key={module}
+                    className={`rounded-2xl border p-2.5 ${
+                      active
+                        ? 'border-emerald-500/20 bg-emerald-500/5'
+                        : 'border-border bg-surface-hover opacity-70'
+                    }`}
+                  >
                     <p className="font-mono text-[10px] font-bold text-text-main">{module}</p>
                     <p className="text-[10px] text-text-muted">{desc}</p>
                     <span className={`text-[9px] font-extrabold ${active ? 'text-emerald-500' : 'text-text-muted'}`}>
@@ -381,69 +427,116 @@ export function OdooAdminScreen() {
             </div>
           </section>
 
-          <section className="xl:col-span-8 space-y-5">
-            {/* Users */}
-            <div className="rounded-3xl bg-surface border border-border shadow-xs overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <h3 className="text-xs font-extrabold text-text-main flex items-center gap-2">
+          <section className="space-y-5 xl:col-span-8">
+            {/* Хэрэглэгчид */}
+            <div className="zity-card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <h3 className="flex items-center gap-2 text-xs font-extrabold text-text-main">
                   <Users className="h-4 w-4 text-emerald-500" /> Бүртгүүлсэн хэрэглэгчид
                 </h3>
-                <span className="text-[10px] font-bold text-text-muted">Chef / Delguur unified</span>
+                <span className="text-[10px] font-bold text-text-muted">
+                  {isLoadingDashboard ? 'Уншиж байна...' : `${users.length} хэрэглэгч`}
+                </span>
               </div>
+
+              {dashboardError && (
+                <div className="flex gap-2 border-b border-border bg-amber-500/10 px-4 py-2.5 text-[11px] leading-relaxed text-amber-600">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Chef backend-ийн нэгдсэн жагсаалт татагдсангүй: {dashboardError} Одоогоор зөвхөн Delguur
+                    талын хэрэглэгч харагдаж байна.
+                  </span>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-surface-hover text-[10px] uppercase text-text-muted">
                     <tr>
                       <th className="px-4 py-3">Хэрэглэгч</th>
                       <th className="px-4 py-3">Эх сурвалж</th>
-                      <th className="px-4 py-3">Хадгалсан бараа</th>
+                      <th className="px-4 py-3">Хадгалсан хаяг</th>
                       <th className="px-4 py-3">Захиалга</th>
                       <th className="px-4 py-3">Сүүлийн идэвх</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {registeredUsers.map((row) => (
-                      <tr key={row.id} className="border-t border-border">
-                        <td className="px-4 py-3">
-                          <p className="font-extrabold text-text-main">{row.name}</p>
-                          <p className="text-[10px] text-text-muted">{row.email} · {row.phone}</p>
+                    {users.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-text-muted">
+                          Хэрэглэгчийн мэдээлэл алга.
                         </td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-extrabold text-emerald-600 border border-emerald-500/20">
-                            {row.source === 'Both' ? <CheckCircle2 className="h-3 w-3" /> : row.source === 'Zity Chef' ? <ChefHat className="h-3 w-3" /> : <Store className="h-3 w-3" />}
-                            {row.source}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-bold">{row.savedItems}</td>
-                        <td className="px-4 py-3 font-bold">{row.orders}</td>
-                        <td className="px-4 py-3 text-text-muted">{row.lastSeen}</td>
                       </tr>
-                    ))}
+                    ) : (
+                      users.map((row) => (
+                        <tr key={row.id} className="border-t border-border">
+                          <td className="px-4 py-3">
+                            <p className="font-extrabold text-text-main">{row.name}</p>
+                            <p className="text-[10px] text-text-muted">
+                              {row.email} · {row.phone}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-extrabold text-emerald-600">
+                              {row.source === 'Both' ? (
+                                <CheckCircle2 className="h-3 w-3" />
+                              ) : row.source === 'Zity Chef' ? (
+                                <ChefHat className="h-3 w-3" />
+                              ) : (
+                                <Store className="h-3 w-3" />
+                              )}
+                              {row.source}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-bold">{row.savedItems}</td>
+                          <td className="px-4 py-3 font-bold">{row.orders}</td>
+                          <td className="px-4 py-3 text-text-muted">{row.lastSeen}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Products */}
-              <div className="rounded-3xl bg-surface border border-border shadow-xs overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                  <h3 className="text-xs font-extrabold text-text-main flex items-center gap-2">
-                    <Package className="h-4 w-4 text-emerald-500" /> Хадгалагдаж байгаа бараа
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              {/* Бараа */}
+              <div className="zity-card overflow-hidden">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <h3 className="flex items-center gap-2 text-xs font-extrabold text-text-main">
+                    <Package className="h-4 w-4 text-emerald-500" /> Бараа, нөөц
                   </h3>
-                  <span className="text-[10px] font-bold text-text-muted">{products.length} item</span>
+                  <span className="text-[10px] font-bold text-text-muted">
+                    {isLoadingProducts ? 'Уншиж байна...' : `${products.length} бараа`}
+                  </span>
                 </div>
                 <div className="max-h-[420px] overflow-y-auto">
-                  {products.slice(0, 12).map((product) => (
-                    <div key={product.id} className="flex items-center gap-3 border-b border-border p-3 last:border-0">
-                      <img src={product.image} alt={product.name} className="h-12 w-12 rounded-xl object-cover bg-surface-hover" />
+                  {products.map((product) => (
+                    <div
+                      key={product.id}
+                      className="flex items-center gap-3 border-b border-border p-3 last:border-0"
+                    >
+                      <img
+                        src={product.image}
+                        alt=""
+                        loading="lazy"
+                        className="h-12 w-12 rounded-xl bg-surface-hover object-cover"
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-extrabold text-text-main">{product.name}</p>
-                        <p className="text-[10px] text-text-muted">{product.sku} · {product.category}</p>
+                        <p className="text-[10px] text-text-muted">
+                          {product.sku} · {product.category}
+                        </p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs font-black text-emerald-600">{product.price.toLocaleString()}₮</p>
-                        <p className={`text-[10px] font-bold ${product.stock <= 50 ? 'text-amber-500' : 'text-text-muted'}`}>
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs font-black text-emerald-600">
+                          {formatMnt(product.discountPrice ?? product.price)}
+                        </p>
+                        <p
+                          className={`text-[10px] font-bold ${
+                            product.stock <= LOW_STOCK_THRESHOLD ? 'text-amber-500' : 'text-text-muted'
+                          }`}
+                        >
                           {product.stock} {product.unit}
                         </p>
                       </div>
@@ -452,56 +545,68 @@ export function OdooAdminScreen() {
                 </div>
               </div>
 
-              {/* Orders */}
-              <div className="rounded-3xl bg-surface border border-border shadow-xs overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                  <h3 className="text-xs font-extrabold text-text-main flex items-center gap-2">
+              {/* Захиалга */}
+              <div className="zity-card overflow-hidden">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <h3 className="flex items-center gap-2 text-xs font-extrabold text-text-main">
                     <ShoppingBag className="h-4 w-4 text-emerald-500" /> Захиалгууд
                   </h3>
-                  <span className="text-[10px] font-bold text-text-muted">{orders.length} order</span>
+                  <span className="text-[10px] font-bold text-text-muted">{orders.length} захиалга</span>
                 </div>
                 <div className="max-h-[420px] overflow-y-auto">
-                  {orders.map((order) => (
-                    <div key={order.id} className="border-b border-border p-3 last:border-0">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-extrabold text-text-main">{order.id}</p>
-                          <p className="text-[10px] text-text-muted">{order.odooOrderRef} · {order.items.length} бараа</p>
+                  {orders.length === 0 ? (
+                    <p className="py-10 text-center text-xs text-text-muted">Захиалга бүртгэгдээгүй байна.</p>
+                  ) : (
+                    orders.map((order) => (
+                      <div key={order.id} className="border-b border-border p-3 last:border-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-extrabold text-text-main">{order.id}</p>
+                            <p className="truncate text-[10px] text-text-muted">
+                              {order.odooOrderRef} · {order.items.length} бараа
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-extrabold text-emerald-600">
+                            {order.status}
+                          </span>
                         </div>
-                        <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-extrabold text-emerald-600 border border-emerald-500/20">
-                          {order.status}
-                        </span>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <SyncDot label="Odoo" state={order.odooSync.status} />
+                            <SyncDot label="Chef" state={order.chefSync.status} />
+                          </div>
+                          <p className="text-sm font-black text-text-main">{formatMnt(order.totalAmount)}</p>
+                        </div>
                       </div>
-                      <div className="mt-2 flex items-center justify-between">
-                        <p className="text-[10px] text-text-muted">{new Date(order.createdAt).toLocaleString('mn-MN')}</p>
-                        <p className="text-sm font-black text-text-main">{order.totalAmount.toLocaleString()}₮</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Live Sync Logs */}
-            <div className="rounded-3xl bg-surface border border-border shadow-xs p-4">
-              <h3 className="text-xs font-extrabold text-text-main mb-3 flex items-center gap-2">
+            {/* Синкийн түүх */}
+            <div className="zity-card p-4">
+              <h3 className="mb-3 flex items-center gap-2 text-xs font-extrabold text-text-main">
                 <Activity className="h-4 w-4 text-emerald-500" /> Синхрончлолын түүх
               </h3>
-              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
                 {logs.length === 0 ? (
-                  <p className="text-xs text-text-muted text-center py-4">Синхрончлол бүртгэл байхгүй байна.</p>
+                  <p className="py-4 text-center text-xs text-text-muted">
+                    Түүх хоосон байна. "Синк хийх" товчийг дарж эхлүүлнэ үү.
+                  </p>
                 ) : (
                   logs.map((log) => (
-                    <div key={log.id} className="flex gap-2.5 rounded-2xl bg-surface-hover p-3 border border-border">
+                    <div key={log.id} className="flex gap-2.5 rounded-2xl border border-border bg-surface-hover p-3">
                       <div className="mt-0.5">{statusIcon(log.status)}</div>
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
-                          <p className="text-[11px] font-bold text-text-main truncate">{log.action}</p>
-                          <span className="text-[10px] text-text-muted font-mono shrink-0">{log.timestamp}</span>
+                          <p className="truncate text-[11px] font-bold text-text-main">{log.action}</p>
+                          <span className="shrink-0 font-mono text-[10px] text-text-muted">
+                            {formatTime(log.timestamp)}
+                          </span>
                         </div>
-                        <p className="text-[10px] text-text-muted">{log.message}</p>
+                        <p className="text-[10px] leading-relaxed text-text-muted">{log.message}</p>
                       </div>
-                      <Eye className="mt-0.5 h-4 w-4 text-text-muted" />
                     </div>
                   ))
                 )}
@@ -510,12 +615,35 @@ export function OdooAdminScreen() {
           </section>
         </div>
 
-        <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-xs text-text-muted">
-          Admin dashboard одоогоор frontend store + Chef API fallback дээр ажиллаж байна. Production дээр `res.partner`, `sale.order`, `product.product`, `stock.quant`, `mail.mail` endpoint-уудыг backend-ээр дамжуулж холбоход энэ UI шууд ашиглагдана.
+        <div className="rounded-3xl border border-border bg-surface p-4 text-[11px] leading-relaxed text-text-muted">
+          <p className="mb-1 font-bold text-text-main">Интеграцийн одоогийн байдал</p>
+          <ul className="list-inside list-disc space-y-1">
+            <li>
+              Zity Chef API: <span className="font-mono">{env.chefApiUrl}</span> —{' '}
+              <span className={connection.status === 'live' ? 'font-bold text-emerald-600' : 'font-bold text-amber-500'}>
+                {connection.status === 'live' ? 'холбогдсон' : 'холбогдоогүй (локал каталог)'}
+              </span>
+            </li>
+            <li>
+              Odoo ERP: <span className="font-mono">{config.url}</span> —{' '}
+              <span className="font-bold">{mode === 'bridge' ? 'backend bridge' : 'симуляц'}</span>
+            </li>
+            <li>Нууц түлхүүрүүд (Odoo API key, SMTP password, service role key) backend дээр л байна.</li>
+          </ul>
         </div>
-      </main>
+      </div>
+    </AppShell>
+  );
+}
 
-      <BottomNav />
-    </div>
+function SyncDot({ label, state }: { label: string; state: 'pending' | 'success' | 'failed' }) {
+  const color =
+    state === 'success' ? 'bg-emerald-500' : state === 'failed' ? 'bg-red-500' : 'bg-amber-500';
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-1.5 py-0.5 text-[9px] font-bold text-text-muted">
+      <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
+      {label}
+    </span>
   );
 }

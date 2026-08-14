@@ -1,162 +1,170 @@
-import React from 'react';
-import { Search, ShoppingCart, MapPin, Moon, Sun, ChefHat, Database, ChevronDown, UtensilsCrossed, PackageCheck, User, LogIn } from 'lucide-react';
+import { ChevronDown, LogIn, MapPin, Menu, Moon, Search, ShoppingCart, Sun, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+import { ZityMark } from './ui/ZityLogo';
 import { useCartStore } from '../store/useCartStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useSearchStore } from '../store/useSearchStore';
-import { useOdooStore } from '../store/useOdooStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { getInitials } from '../lib/format';
 
-export function Header({ onOpenOdooModal }: { onOpenOdooModal?: () => void }) {
-  const { getTotalItems } = useCartStore();
+interface HeaderProps {
+  /** Хайлтын мөр харуулах эсэх — зөвхөн каталогтой хуудсанд хэрэгтэй */
+  showSearch?: boolean;
+  /** Мобайл дээр хажуугийн цэс нээх */
+  onOpenMenu?: () => void;
+  /** Хуудсын гарчиг — каталоггүй хуудсанд лого дээр нэмж харуулна */
+  title?: string;
+}
+
+export function Header({ showSearch = true, onOpenMenu, title }: HeaderProps) {
+  const navigate = useNavigate();
+
+  const totalItems = useCartStore((state) => state.getTotalItems());
   const { isDark, toggleTheme } = useThemeStore();
   const { searchQuery, setSearchQuery } = useSearchStore();
-  const { config } = useOdooStore();
-  const { user, selectedAddressIndex, isAuthenticated } = useAuthStore();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const totalItems = getTotalItems();
 
-  const currentAddress = user.addresses[selectedAddressIndex] || user.addresses[0];
-
-  const navLinks = [
-    { label: 'Дэлгүүр', path: '/', icon: UtensilsCrossed },
-    { label: 'Хоолны Багцууд', path: '/recipe-kits', icon: ChefHat },
-    { label: 'Fridge', path: '/zity-fridge', icon: PackageCheck },
-    { label: 'Захиалгууд', path: '/orders', icon: PackageCheck },
-    { label: 'Odoo ERP', path: '/odoo-admin', icon: Database },
-    { label: 'Профайл', path: '/profile', icon: User },
-  ];
+  const account = useAuthStore((state) => state.account);
+  const selectedAddress = useAuthStore((state) => state.getSelectedAddress());
 
   return (
-    <header className="sticky top-0 z-30 bg-surface/90 px-4 pt-3 pb-3 backdrop-blur-md border-b border-border shadow-xs">
-      <div className="max-w-7xl mx-auto space-y-3">
-        {/* Top Banner Row */}
-        <div className="flex items-center justify-between gap-4">
-          {/* Brand logo & tagline */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-emerald-500 text-white shadow-md shadow-purple-500/20 font-black text-xl shrink-0">
-              Z
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-base tracking-tight text-text-main">ZITY SHOP</span>
-                <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-500 border border-purple-500/20">
-                  CHEF ECOSYSTEM
+    <header className="sticky top-0 z-30 border-b border-border bg-surface/90 px-4 pb-3 pt-3 shadow-xs backdrop-blur-md">
+      <div className="mx-auto max-w-7xl space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {/* Хажуугийн цэс — зөвхөн мобайл/таблет */}
+            <button
+              onClick={onOpenMenu}
+              className="-ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-hover hover:text-text-main lg:hidden"
+              aria-label="Цэс нээх"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+
+            {/* Лого: desktop дээр sidebar-т байгаа тул зөвхөн мобайл дээр */}
+            <button
+              onClick={() => navigate('/')}
+              className="flex min-w-0 items-center gap-2 text-left lg:hidden"
+              aria-label="Нүүр хуудас"
+            >
+              <ZityMark className="h-9 w-9 shrink-0" />
+              <span className="hidden min-w-0 sm:block">
+                <span className="flex items-center gap-1">
+                  <span className="text-sm font-extrabold tracking-tight text-text-main">ZITY</span>
+                  <span className="text-sm font-extrabold tracking-tight text-emerald-600">SHOP</span>
                 </span>
-              </div>
-              <p className="text-[11px] text-text-muted flex items-center gap-1 font-medium hidden sm:flex">
-                <ChefHat className="h-3.5 w-3.5 text-purple-400" /> Zity Chef & Odoo ERP Unified Standard
-              </p>
-            </div>
+              </span>
+            </button>
+
+            {/* Desktop дээр хуудсын гарчиг — лого нь sidebar дээр байгаа тул давхардуулахгүй */}
+            {title && (
+              <h1 className="hidden truncate text-lg font-extrabold text-text-main lg:block">{title}</h1>
+            )}
           </div>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 bg-surface-hover/80 p-1 rounded-2xl border border-border">
-            {navLinks.map((link) => {
-              const Icon = link.icon;
-              const isActive = location.pathname === link.path;
-              return (
-                <button
-                  key={link.path}
-                  onClick={() => navigate(link.path)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
-                    isActive
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm'
-                      : 'text-text-muted hover:text-text-main hover:bg-surface'
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {link.label}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Action icons */}
-          <div className="flex items-center gap-2">
-            {/* Odoo Status Badge */}
-            <button
-              onClick={onOpenOdooModal}
-              className="hidden lg:flex items-center gap-1.5 rounded-full bg-surface-hover px-3 py-1.5 text-xs font-semibold text-text-main border border-border hover:bg-border transition-colors"
-              title="Odoo ERP холболтын төлөв"
-            >
-              <Database className="h-3.5 w-3.5 text-emerald-500" />
-              <span>Odoo</span>
-              <span className={`h-2 w-2 rounded-full ${config.isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-            </button>
-
-            {/* Theme Toggle */}
+          <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={toggleTheme}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-text-main transition-colors hover:bg-border border border-border shrink-0"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface-hover text-text-main transition-colors hover:bg-border"
+              aria-label={isDark ? 'Гэрэлтэй горим руу шилжих' : 'Харанхуй горим руу шилжих'}
+              title={isDark ? 'Гэрэлтэй горим' : 'Харанхуй горим'}
             >
-              {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-700" />}
+              {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4" />}
             </button>
 
-            {/* Cart Icon */}
             <button
-              onClick={() => navigate(isAuthenticated ? '/profile' : '/login')}
-              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-text-main transition-colors hover:bg-border border border-border shrink-0"
-              title={isAuthenticated ? 'Профайл' : 'Google нэвтрэлт'}
+              onClick={() => navigate(account ? '/profile' : '/login')}
+              className="hidden h-9 items-center gap-2 rounded-full border border-border bg-surface-hover px-2 text-text-main transition-colors hover:bg-border sm:flex"
+              title={account ? account.name : 'Нэвтрэх / бүртгүүлэх'}
             >
-              {isAuthenticated ? <User className="h-4 w-4" /> : <LogIn className="h-4 w-4 text-emerald-600" />}
+              {account ? (
+                <>
+                  {account.avatarUrl ? (
+                    <img
+                      src={account.avatarUrl}
+                      alt=""
+                      className="h-7 w-7 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-black text-white">
+                      {getInitials(account.name)}
+                    </span>
+                  )}
+                  <span className="max-w-[90px] truncate pr-1 text-xs font-bold">{account.name}</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="ml-1.5 h-4 w-4 text-emerald-600" />
+                  <span className="pr-2 text-xs font-bold">Нэвтрэх</span>
+                </>
+              )}
             </button>
 
-            {/* Cart Icon */}
             <button
               onClick={() => navigate('/cart')}
-              className="relative flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-white transition-transform active:scale-95 shadow-md shadow-emerald-600/20 shrink-0"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md shadow-emerald-600/20 transition-transform active:scale-95"
+              aria-label={`Сагс${totalItems > 0 ? ` (${totalItems} бараа)` : ''}`}
             >
               <ShoppingCart className="h-4 w-4" />
               {totalItems > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-slate-900 border-2 border-surface">
-                  {totalItems}
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-surface bg-amber-400 px-1 text-[10px] font-black text-slate-900">
+                  {totalItems > 99 ? '99+' : totalItems}
                 </span>
               )}
             </button>
           </div>
         </div>
 
-        {/* Address & Search Row (Flex responsive on tablet/desktop) */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-          {/* Address Quick Selector */}
-          <div className="md:col-span-4 flex items-center justify-between gap-2 bg-surface-hover/70 rounded-xl px-3 py-2 border border-border text-xs">
-            <div className="flex items-center gap-2 overflow-hidden">
-              <MapPin className="h-4 w-4 text-emerald-500 shrink-0" />
-              <div className="truncate">
-                <span className="font-semibold text-text-main mr-1">{currentAddress.district}, {currentAddress.khoroo}:</span>
-                <span className="text-text-muted truncate">{currentAddress.streetBuilding}</span>
+        {/* Хаяг + хайлт */}
+        {showSearch && (
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface-hover/70 px-3 py-2 text-xs md:col-span-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <MapPin className="h-4 w-4 shrink-0 text-emerald-500" />
+                {selectedAddress ? (
+                  <span className="truncate">
+                    <span className="mr-1 font-semibold text-text-main">
+                      {selectedAddress.district}, {selectedAddress.khoroo}
+                    </span>
+                    <span className="text-text-muted">{selectedAddress.streetBuilding}</span>
+                  </span>
+                ) : (
+                  <span className="truncate text-text-muted">
+                    {account ? 'Хүргэлтийн хаяг нэмээгүй байна' : 'Нэвтрээд хаягаа хадгална уу'}
+                  </span>
+                )}
               </div>
-            </div>
-            <button
-              onClick={() => navigate('/profile')}
-              className="text-[11px] font-bold text-emerald-600 hover:underline shrink-0 flex items-center gap-0.5"
-            >
-              Солих <ChevronDown className="h-3 w-3" />
-            </button>
-          </div>
-
-          {/* Search Input */}
-          <div className="md:col-span-8 relative flex items-center w-full">
-            <Search className="absolute left-3.5 h-4 w-4 text-text-muted pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Бараа, хоолны орц, жор хайх..."
-              className="h-10 w-full rounded-xl bg-surface-hover pl-10 pr-10 text-xs font-medium text-text-main outline-none transition-all focus:bg-surface focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 border border-border placeholder:text-text-muted"
-            />
-            {searchQuery && (
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 text-xs text-text-muted hover:text-text-main font-bold"
+                onClick={() => navigate(account ? '/profile' : '/login')}
+                className="flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-emerald-600 hover:underline"
               >
-                ✕
+                {selectedAddress ? 'Солих' : 'Нэмэх'} <ChevronDown className="h-3 w-3" />
               </button>
-            )}
+            </div>
+
+            <div className="relative flex w-full items-center md:col-span-8">
+              <Search className="pointer-events-none absolute left-3.5 h-4 w-4 text-text-subtle" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Бараа, хоолны орц, жор хайх..."
+                aria-label="Хайлт"
+                className="h-10 w-full rounded-xl border border-border bg-surface-hover pl-10 pr-10 text-xs font-medium text-text-main outline-none transition-all placeholder:text-text-subtle focus:border-emerald-500 focus:bg-surface focus:ring-2 focus:ring-emerald-500/20"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 text-text-muted transition-colors hover:text-text-main"
+                  aria-label="Хайлт цэвэрлэх"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </header>
   );

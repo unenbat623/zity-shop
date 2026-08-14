@@ -1,105 +1,202 @@
-import { Order, Product, OdooConfig, OdooSyncLog } from '../types';
+/**
+ * Odoo ERP интеграцийн давхарга.
+ *
+ * ⚠️ ЧУХАЛ: Odoo JSON-RPC руу browser-оос ШУУД хандахгүй. Шалтгаан:
+ *   1. Odoo API key / нууц үг frontend bundle-д ил гарна
+ *   2. Odoo нь CORS-г үндсэндээ зөвшөөрдөггүй
+ *
+ * Тиймээс энэ модуль хоёр горимоор ажиллана:
+ *   - `bridge`  — Zity Chef backend дээрх `/api/odoo/*` proxy руу хүсэлт илгээнэ (production зам)
+ *   - `simulated` — proxy байхгүй үед UI-г бүрэн ажиллуулах симуляц (dev/demo)
+ *
+ * Горим нь автоматаар тодорхойлогдоно: bridge endpoint хариу өгвөл `bridge`, эс бөгөөс `simulated`.
+ */
+
+import { ApiError, chefRequest } from './apiClient';
+import { OdooConfig, OdooSyncLog, Order, Product } from '../types';
+import { env } from '../lib/env';
 import { MOCK_PRODUCTS } from '../constants/mockData';
 
-export class OdooService {
-  private static instance: OdooService;
+export type OdooMode = 'bridge' | 'simulated';
+
+interface OdooBridgeOrderResponse {
+  odooOrderRef?: string;
+  name?: string;
+  id?: number | string;
+}
+
+const MAX_LOGS = 30;
+
+class OdooService {
+  private mode: OdooMode = 'simulated';
+
   private config: OdooConfig = {
-    url: (import.meta as any).env?.VITE_ODOO_URL || 'https://odoo.zity.mn',
-    db: (import.meta as any).env?.VITE_ODOO_DB || 'zity_delguur_db',
-    username: (import.meta as any).env?.VITE_ODOO_USERNAME || 'api_admin@zity.mn',
-    apiKey: (import.meta as any).env?.VITE_ODOO_API_KEY || '',
-    isConnected: true,
+    url: env.odoo.url,
+    db: env.odoo.db,
+    username: env.odoo.username,
+    // API key нь зөвхөн backend дээр байна — frontend хэзээ ч барихгүй
+    apiKey: '',
+    isConnected: false,
     autoSync: true,
-    lastSyncTime: new Date().toISOString(),
+    lastSyncTime: null,
   };
 
-  private syncLogs: OdooSyncLog[] = [
-    {
-      id: 'log-1',
-      timestamp: new Date(Date.now() - 3600000).toLocaleTimeString('mn-MN'),
-      action: 'ERP Барааны нөөц синк хийсэн',
-      status: 'success',
-      message: 'Odoo-с 15 барааны үнэ болон нөөц амжилттай шинэчлэгдлээ.',
-    },
-    {
-      id: 'log-2',
-      timestamp: new Date(Date.now() - 1800000).toLocaleTimeString('mn-MN'),
-      action: 'Zity Chef Орц синк',
-      status: 'success',
-      message: 'Zity Chef хоолны цэс багцын мэдээлэл холбогдлоо.',
-    }
-  ];
+  private syncLogs: OdooSyncLog[] = [];
 
-  public static getInstance(): OdooService {
-    if (!OdooService.instance) {
-      OdooService.instance = new OdooService();
-    }
-    return OdooService.instance;
-  }
-
-  public getConfig(): OdooConfig {
+  getConfig(): OdooConfig {
     return { ...this.config };
   }
 
-  public getLogs(): OdooSyncLog[] {
+  getMode(): OdooMode {
+    return this.mode;
+  }
+
+  getLogs(): OdooSyncLog[] {
     return [...this.syncLogs];
   }
 
-  public async updateConfig(newConfig: Partial<OdooConfig>): Promise<boolean> {
+  /** Зөвхөн холболтын хаяг/DB-г шинэчилнэ. Нууц түлхүүр энд хадгалагдахгүй. */
+  updateConfig(newConfig: Partial<Pick<OdooConfig, 'url' | 'db' | 'username' | 'autoSync'>>): void {
     this.config = { ...this.config, ...newConfig };
-    this.addLog('Odoo тохиргоо шинэчлэгдлээ', 'success', 'ERP холболтын тохиргоо амжилттай хадгалагдлаа.');
-    return true;
-  }
-
-  public async testConnection(): Promise<{ success: boolean; message: string }> {
-    // Simulating Odoo JSON-RPC authentication (/xmlrpc/2/common)
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    this.config.isConnected = true;
-    this.config.lastSyncTime = new Date().toISOString();
-    this.addLog('Odoo холболт шалгах', 'success', 'Odoo ERP системтэй амжилттай холбогдлоо (Session ID: 0x9F412)');
-    return { success: true, message: 'Odoo ERP холболт амжилттай!' };
-  }
-
-  public async fetchProducts(): Promise<Product[]> {
-    // Simulating Odoo model search_read ('product.product')
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    this.config.lastSyncTime = new Date().toISOString();
-    this.addLog('Odoo Бараа татах', 'success', `${MOCK_PRODUCTS.length} барааны мэдээлэл Odoo ERP-с татагдлаа.`);
-    return MOCK_PRODUCTS;
-  }
-
-  public async pushOrderToOdoo(order: Order): Promise<{ odooOrderRef: string; success: boolean }> {
-    // Simulating Odoo model create ('sale.order') and ('sale.order.line')
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    const randomId = Math.floor(1000 + Math.random() * 9000);
-    const odooOrderRef = `SO-${new Date().getFullYear()}-${randomId}`;
-
     this.addLog(
-      'Odoo Захиалга үүсгэх',
+      'Odoo тохиргоо шинэчлэгдлээ',
       'success',
-      `Захиалга ${order.id} Odoo ERP руу шилжлээ. Odoo Ref: ${odooOrderRef} (Дүн: ${order.totalAmount.toLocaleString()}₮)`
+      `Endpoint: ${this.config.url} · DB: ${this.config.db}`
     );
-
-    return {
-      odooOrderRef,
-      success: true,
-    };
   }
 
-  public addLog(action: string, status: 'success' | 'warning' | 'error', message: string) {
-    const newLog: OdooSyncLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString('mn-MN'),
+  /** Backend дээрх Odoo bridge ажиллаж байгаа эсэхийг шалгана */
+  async testConnection(): Promise<{ success: boolean; message: string; mode: OdooMode }> {
+    try {
+      const response = await chefRequest<{ connected?: boolean; db?: string; version?: string }>(
+        '/odoo/status',
+        { timeoutMs: 6000 }
+      );
+
+      this.mode = 'bridge';
+      this.config.isConnected = response?.connected !== false;
+      this.config.lastSyncTime = new Date().toISOString();
+      if (response?.db) this.config.db = response.db;
+
+      const message = this.config.isConnected
+        ? `Odoo ERP холбогдлоо${response?.version ? ` (v${response.version})` : ''}.`
+        : 'Odoo bridge хариу өгсөн ч ERP холболт идэвхгүй байна.';
+
+      this.addLog('Odoo холболт шалгах', this.config.isConnected ? 'success' : 'warning', message);
+      return { success: this.config.isConnected, message, mode: 'bridge' };
+    } catch (error) {
+      this.mode = 'simulated';
+      this.config.isConnected = false;
+
+      const detail = error instanceof ApiError ? error.userMessage : 'Odoo bridge олдсонгүй.';
+      const message = `${detail} Симуляц горимд ажиллаж байна.`;
+      this.addLog('Odoo холболт шалгах', 'warning', message);
+      return { success: false, message, mode: 'simulated' };
+    }
+  }
+
+  /** Odoo-с барааны каталог татах (bridge горимд). Симуляцад локал каталог буцаана. */
+  async fetchProducts(): Promise<{ products: Product[]; mode: OdooMode }> {
+    try {
+      const response = await chefRequest<{ products?: Product[] }>('/odoo/products', {
+        timeoutMs: 10_000,
+      });
+
+      if (Array.isArray(response?.products) && response.products.length > 0) {
+        this.mode = 'bridge';
+        this.config.isConnected = true;
+        this.config.lastSyncTime = new Date().toISOString();
+        this.addLog(
+          'Odoo бараа татах',
+          'success',
+          `${response.products.length} барааны үнэ/нөөц Odoo-с шинэчлэгдлээ.`
+        );
+        return { products: response.products, mode: 'bridge' };
+      }
+
+      throw new ApiError('http', '/odoo/products', 'Хоосон каталог.', 204);
+    } catch {
+      this.mode = 'simulated';
+      this.config.lastSyncTime = new Date().toISOString();
+      this.addLog(
+        'Odoo бараа татах',
+        'warning',
+        `Odoo bridge холбогдоогүй тул локал каталог (${MOCK_PRODUCTS.length} бараа) ашиглалаа.`
+      );
+      return { products: MOCK_PRODUCTS, mode: 'simulated' };
+    }
+  }
+
+  /**
+   * Захиалгыг Odoo `sale.order` болгож бүртгэнэ.
+   * Bridge байхгүй үед симуляцын reference үүсгэнэ — UI урсгал тасрахгүй.
+   */
+  async pushOrderToOdoo(order: Order): Promise<{ odooOrderRef: string; success: boolean; mode: OdooMode }> {
+    try {
+      const response = await chefRequest<OdooBridgeOrderResponse>('/odoo/orders', {
+        method: 'POST',
+        timeoutMs: 12_000,
+        body: {
+          externalOrderId: order.id,
+          partner: {
+            name: order.address.phone,
+            phone: order.address.phone,
+            street: `${order.address.district}, ${order.address.khoroo}, ${order.address.streetBuilding}`,
+          },
+          lines: order.items.map((item) => ({
+            odooId: item.odooId,
+            sku: item.sku,
+            name: item.name,
+            quantity: item.quantity,
+            priceUnit: item.discountPrice ?? item.price,
+          })),
+          amountTotal: order.totalAmount,
+          deliveryFee: order.deliveryFee,
+          discount: order.discountAmount,
+          paymentMethod: order.paymentMethod,
+        },
+      });
+
+      const odooOrderRef = response?.odooOrderRef || response?.name || `SO-${response?.id ?? order.id}`;
+      this.mode = 'bridge';
+      this.config.isConnected = true;
+      this.config.lastSyncTime = new Date().toISOString();
+
+      this.addLog(
+        'Odoo захиалга үүсгэх',
+        'success',
+        `${order.id} → Odoo ${odooOrderRef} (${order.totalAmount.toLocaleString('mn-MN')}₮)`
+      );
+
+      return { odooOrderRef, success: true, mode: 'bridge' };
+    } catch {
+      this.mode = 'simulated';
+      const odooOrderRef = `SIM-SO-${new Date().getFullYear()}-${order.id.slice(-4)}`;
+
+      this.addLog(
+        'Odoo захиалга үүсгэх',
+        'warning',
+        `Odoo bridge олдсонгүй. ${order.id} захиалгад симуляц reference (${odooOrderRef}) олголоо.`
+      );
+
+      // Симуляц бол ч захиалга үргэлжлэх ёстой тул success=true
+      return { odooOrderRef, success: true, mode: 'simulated' };
+    }
+  }
+
+  addLog(action: string, status: OdooSyncLog['status'], message: string): void {
+    this.syncLogs.unshift({
+      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
       action,
       status,
       message,
-    };
-    this.syncLogs.unshift(newLog);
-    if (this.syncLogs.length > 20) {
-      this.syncLogs.pop();
+    });
+
+    if (this.syncLogs.length > MAX_LOGS) {
+      this.syncLogs.length = MAX_LOGS;
     }
   }
 }
 
-export const odooService = OdooService.getInstance();
+export const odooService = new OdooService();
