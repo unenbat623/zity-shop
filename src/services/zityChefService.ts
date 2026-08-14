@@ -306,14 +306,17 @@ function mapRecipeBundle(
   const title = toText(payload.title, `Zity Chef жор ${index + 1}`);
   const ingredients = Array.isArray(payload.ingredients) ? payload.ingredients : [];
 
-  const FALLBACK_INGREDIENT_PRICE = 3500;
-
   /**
    * Орцуудыг каталогийн бараатай тааруулна.
    *
-   * Нэг жорын хоёр орц ижил бараа руу таарч болно (жишээ нь "лууван" ба
-   * "жижиглэсэн лууван"). Тэр тохиолдолд тусад нь мөр үүсгэвэл сагсанд
-   * давхардаж, React key давхцана — тиймээс нэгтгэж тоо ширхгийг нь нэмнэ.
+   * Chef-ийн жор нь орцоо зөвхөн нэрээр (`string[]`) хадгалдаг ба үнэ агуулдаггүй.
+   * Каталогт байхгүй орцод (жишээ нь "Давс", "Хар перец") зохиомол үнэ оноовол
+   * багцын нийт үнэ нарийн тооцоолсон мэт харагдаад бодитоор худал болно.
+   * Тиймээс тааралгүй орцыг `isAvailable: false`, үнэ 0 гэж тэмдэглэж, багцын
+   * үнэд оруулахгүй.
+   *
+   * Нэг жорын хоёр орц ижил бараа руу таарч болно — тэр тохиолдолд нэгтгэж
+   * тоо ширхгийг нэмнэ (эс бөгөөс сагсанд давхардаж React key давхцана).
    */
   const itemsById = new Map<string, RecipeBundle['productItems'][number]>();
 
@@ -341,13 +344,18 @@ function mapRecipeBundle(
       productName: matched?.name ?? ingredientName,
       requiredQty: 1,
       unit: matched?.unit ?? 'порц',
-      pricePerUnit: matched?.discountPrice ?? matched?.price ?? FALLBACK_INGREDIENT_PRICE,
+      pricePerUnit: matched?.discountPrice ?? matched?.price ?? 0,
+      isAvailable: Boolean(matched),
     });
   });
 
   const productItems = Array.from(itemsById.values());
 
-  const price = productItems.reduce((sum, item) => sum + item.pricePerUnit * item.requiredQty, 0);
+  // Зөвхөн дэлгүүрт байгаа орцын үнийг нийлүүлнэ
+  const price = productItems
+    .filter((item) => item.isAvailable)
+    .reduce((sum, item) => sum + item.pricePerUnit * item.requiredQty, 0);
+
   // Багцаар авахад 10% хямдрал
   const discountPrice = price > 0 ? Math.round((price * 0.9) / 100) * 100 : undefined;
 
@@ -362,7 +370,9 @@ function mapRecipeBundle(
     prepTime: toText(payload.time, '25 мин'),
     // Chef жорд порцын тоо байхгүй — орцын тооноос ойролцоогоор тооцно
     servings: Math.max(2, Math.min(6, Math.ceil(ingredients.length / 2))),
-    price: price || 24500,
+    // Нэг ч орц каталогт таараагүй бол үнэ 0 — UI нь "үнэ тодорхойгүй" гэж
+    // харуулна. Зохиомол тоо гаргаж хэрэглэгчийг төөрөгдүүлэхгүй.
+    price,
     discountPrice,
     image: toText(payload.image, DEFAULT_RECIPE_IMAGE),
     productItems,

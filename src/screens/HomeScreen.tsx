@@ -196,8 +196,10 @@ export function HomeScreen() {
                   </div>
 
                   <div className="flex items-center justify-between gap-2 p-4">
-                    <div>
-                      {bundle.discountPrice ? (
+                    <div className="min-w-0">
+                      {bundle.price <= 0 ? (
+                        <span className="text-sm font-bold text-text-muted">Үнэ тодорхойгүй</span>
+                      ) : bundle.discountPrice ? (
                         <div className="flex items-baseline gap-1.5">
                           <span className="text-lg font-extrabold text-emerald-600">
                             {formatMnt(bundle.discountPrice)}
@@ -213,6 +215,7 @@ export function HomeScreen() {
 
                     <button
                       onClick={() => handleAddBundle(bundle)}
+                      disabled={bundle.price <= 0}
                       className="zity-btn-primary shrink-0 px-4 py-2.5 text-xs"
                     >
                       <Plus className="h-4 w-4" /> Сагслах
