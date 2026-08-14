@@ -122,15 +122,21 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           {product.name}
         </h3>
 
-        <div className="mt-auto flex items-end justify-between gap-1 border-t border-border/60 pt-2">
-          <div className="flex min-w-0 flex-col">
+        {/*
+          Үнэ ба үйлдлийг ДЭЭР-ДООР байрлуулна.
+          Хажуу тийш байрлуулбал картын доторх өргөн (жижиг дэлгэцэнд ~100px)
+          хоёуланд нь хүрэлцэхгүй тул үнэ шахагдаж, текст нь тоо ширхгийн
+          удирдлага дээр халин гардаг байв.
+        */}
+        <div className="mt-auto space-y-2 border-t border-border/60 pt-2">
+          <div className="flex flex-wrap items-baseline gap-x-1.5">
             {product.discountPrice ? (
               <>
-                <span className="text-[10px] font-medium text-text-subtle line-through">
-                  {formatMnt(product.price)}
-                </span>
                 <span className="text-sm font-black text-emerald-600 sm:text-base">
                   {formatMnt(product.discountPrice)}
+                </span>
+                <span className="text-[10px] font-medium text-text-subtle line-through">
+                  {formatMnt(product.price)}
                 </span>
               </>
             ) : (
@@ -142,23 +148,23 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           </div>
 
           {isOutOfStock ? (
-            <span className="shrink-0 rounded-full border border-border bg-surface-hover px-2.5 py-1.5 text-[9px] font-bold text-text-muted">
-              Дууссан
+            <span className="block rounded-full border border-border bg-surface-hover py-2 text-center text-[10px] font-bold text-text-muted">
+              Нөөц дууссан
             </span>
           ) : quantity > 0 ? (
-            <div className="flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 p-1">
+            <div className="flex items-center justify-between rounded-full border border-emerald-500/30 bg-emerald-500/10 p-1">
               <button
                 onClick={handleRemove}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-surface text-emerald-600 shadow-xs transition-all hover:bg-surface-hover active:scale-90"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface text-emerald-600 shadow-xs transition-all hover:bg-surface-hover active:scale-90"
                 aria-label="Тоо хасах"
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
-              <span className="min-w-[18px] text-center text-xs font-black text-emerald-600">{quantity}</span>
+              <span className="px-1 text-xs font-black text-emerald-600">{quantity}</span>
               <button
                 onClick={handleAdd}
                 disabled={hasReachedStock}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md transition-all hover:bg-emerald-700 active:scale-90 disabled:opacity-40"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md transition-all hover:bg-emerald-700 active:scale-90 disabled:opacity-40"
                 aria-label="Тоо нэмэх"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -167,11 +173,11 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           ) : (
             <button
               onClick={handleAdd}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md shadow-emerald-600/25 transition-all hover:bg-emerald-700 active:scale-90"
+              className="flex w-full items-center justify-center gap-1 rounded-full bg-emerald-600 py-2 text-[11px] font-bold text-white shadow-md shadow-emerald-600/25 transition-all hover:bg-emerald-700 active:scale-95"
               aria-label={`${product.name} сагсанд нэмэх`}
-              title="Сагсанд нэмэх"
             >
-              <Plus className="h-5 w-5" />
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="truncate">Сагслах</span>
             </button>
           )}
         </div>
