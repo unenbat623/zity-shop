@@ -191,7 +191,7 @@ export function RecipeKitsScreen() {
                             : 'Багцын үнэ'}
                         </span>
                         {!hasPrice ? (
-                          <span className="text-xs font-bold leading-tight text-text-muted">
+                          <span className="block break-words text-xs font-bold leading-tight text-text-muted">
                             Үнэ тодорхойгүй
                           </span>
                         ) : bundle.discountPrice ? (

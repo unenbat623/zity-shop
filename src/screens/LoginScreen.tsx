@@ -281,7 +281,7 @@ export function LoginScreen() {
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="text-text-muted transition-colors hover:text-text-main"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-text-muted transition-colors hover:text-text-main"
                     aria-label={showPassword ? 'Нууц үг нуух' : 'Нууц үг харуулах'}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -309,7 +309,7 @@ export function LoginScreen() {
                     type="button"
                     onClick={() => void handleForgotPassword()}
                     disabled={!isConfigured || isBusy}
-                    className="text-[11px] font-bold text-emerald-600 hover:underline disabled:opacity-50"
+                    className="-my-1 px-1 py-2 text-[11px] font-bold text-emerald-600 hover:underline disabled:opacity-50"
                   >
                     Нууц үгээ мартсан уу?
                   </button>
@@ -354,7 +354,7 @@ export function LoginScreen() {
                   <button
                     type="button"
                     onClick={handleCopyRedirect}
-                    className="zity-btn-secondary shrink-0 px-2.5 py-1.5 text-[10px]"
+                    className="zity-btn-secondary shrink-0 px-3 py-2.5 text-[10px]"
                   >
                     <Copy className="h-3 w-3" /> Хуулах
                   </button>

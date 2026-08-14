@@ -148,12 +148,14 @@ export function ProfileScreen() {
 
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-extrabold text-white">{profile.name}</h1>
-                <p className="flex items-center gap-1 truncate text-xs font-medium text-emerald-200">
-                  <Mail className="h-3 w-3 shrink-0" /> {profile.email}
+                <p className="flex min-w-0 items-center gap-1 text-xs font-medium text-emerald-200">
+                  <Mail className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{profile.email}</span>
                 </p>
                 {profile.phone && (
-                  <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-emerald-200">
-                    <Phone className="h-3 w-3" /> {profile.phone}
+                  <p className="mt-0.5 flex min-w-0 items-center gap-1 text-xs font-medium text-emerald-200">
+                    <Phone className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{profile.phone}</span>
                   </p>
                 )}
                 {account && (
@@ -241,7 +243,7 @@ export function ProfileScreen() {
 
             <button
               onClick={toggleZityChefConnection}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-extrabold transition-all active:scale-95 ${
+              className={`shrink-0 rounded-full px-4 py-2.5 text-[11px] font-extrabold transition-all active:scale-95 ${
                 profile.isZityChefConnected
                   ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                   : 'border border-border bg-surface-hover text-text-main hover:bg-border'
@@ -260,7 +262,7 @@ export function ProfileScreen() {
             </h2>
             <button
               onClick={isFormOpen ? closeForm : openCreateForm}
-              className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:underline"
+              className="-my-2 flex shrink-0 items-center gap-1 px-2 py-2 text-[11px] font-bold text-emerald-600 hover:underline"
             >
               {isFormOpen ? (
                 <>
@@ -407,14 +409,14 @@ export function ProfileScreen() {
                     <div className="flex shrink-0 flex-col gap-1">
                       <button
                         onClick={() => openEditForm(address)}
-                        className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface hover:text-text-main"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface hover:text-text-main"
                         aria-label="Хаяг засах"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => handleRemove(address)}
-                        className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface hover:text-red-500"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface hover:text-red-500"
                         aria-label="Хаяг устгах"
                       >
                         <Trash2 className="h-3.5 w-3.5" />

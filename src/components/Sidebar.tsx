@@ -144,7 +144,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             {totalItems > 0 && (
               <button
                 onClick={() => go('/cart')}
-                className="mt-2 flex w-full items-center justify-between text-xs font-bold text-text-main hover:text-emerald-600"
+                className="mt-1 flex w-full items-center justify-between rounded-lg py-2 text-xs font-bold text-text-main hover:text-emerald-600"
               >
                 <span>Сагсанд {totalItems} бараа</span>
                 <span className="text-emerald-600">

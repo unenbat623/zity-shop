@@ -180,7 +180,7 @@ function FridgeCard({ item }: { item: FridgeItem }) {
           <button
             onClick={() => void handleRemove()}
             disabled={isBusy}
-            className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-red-500 disabled:opacity-40"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-red-500 disabled:opacity-40"
             aria-label={`${item.name} хөргөгчөөс хасах`}
           >
             <Trash2 className="h-4 w-4" />

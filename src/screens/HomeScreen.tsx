@@ -155,7 +155,7 @@ export function HomeScreen() {
               </h2>
               <button
                 onClick={() => navigate('/recipe-kits')}
-                className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline sm:text-sm"
+                className="-my-2 flex shrink-0 items-center gap-1 px-1 py-2 text-xs font-bold text-emerald-600 hover:underline sm:text-sm"
               >
                 Бүгдийг харах <ArrowRight className="h-4 w-4" />
               </button>
@@ -198,7 +198,9 @@ export function HomeScreen() {
                   <div className="flex items-center justify-between gap-2 p-4">
                     <div className="min-w-0">
                       {bundle.price <= 0 ? (
-                        <span className="text-sm font-bold text-text-muted">Үнэ тодорхойгүй</span>
+                        <span className="block break-words text-xs font-bold leading-tight text-text-muted">
+                          Үнэ тодорхойгүй
+                        </span>
                       ) : bundle.discountPrice ? (
                         <div className="flex items-baseline gap-1.5">
                           <span className="text-lg font-extrabold text-emerald-600">
