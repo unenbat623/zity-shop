@@ -1,0 +1,19 @@
+# Zity Shop — https://zity-shop.vercel.app
+
+User-agent: *
+Allow: /
+
+# Хувийн болон нэвтрэлт шаардсан хуудсуудыг индексжүүлэхгүй
+Disallow: /profile
+Disallow: /orders
+Disallow: /checkout
+Disallow: /cart
+Disallow: /zity-fridge
+Disallow: /odoo-admin
+Disallow: /login
+
+# Хууль эрх зүйн хуудсууд нээлттэй — индексжих ёстой
+Allow: /terms
+Allow: /privacy
+
+Sitemap: https://zity-shop.vercel.app/sitemap.xml

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Clock, Loader2, QrCode, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Loader2, QrCode, ShieldCheck } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { PaymentMethod } from '../types';
 import { formatMnt } from '../lib/format';
@@ -87,6 +87,15 @@ export function PaymentModal({
         </p>
       }
     >
+      {/* Хуурамч төлбөрийг бодит гэж эндүүрэхээс сэргийлж дээд талд нь тодоор бичнэ */}
+      <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] font-bold leading-relaxed text-amber-600">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          ДЕМО ТӨЛБӨР — бодит гүйлгээ хийгдэхгүй. Энэ цонх зөвхөн урсгалыг харуулах
+          зорилготой бөгөөд production дээр идэвхгүй байна.
+        </span>
+      </div>
+
       <div className="mb-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 p-4 text-center text-white shadow-md">
         <span className="block text-xs font-medium text-emerald-100">Төлөх нийт дүн</span>
         <span className="text-3xl font-extrabold tracking-tight">{formatMnt(amount)}</span>

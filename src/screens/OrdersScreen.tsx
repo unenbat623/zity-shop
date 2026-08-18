@@ -16,8 +16,7 @@ import {
 
 import { AppShell } from '../components/AppShell';
 import { useToastStore } from '../store/useToastStore';
-import { useOrderStore } from '../store/useOrderStore';
-import { useAuthStore } from '../store/useAuthStore';
+import { useOrderStore, useVisibleOrders } from '../store/useOrderStore';
 import { Order, OrderStatus } from '../types';
 import { formatMnt, formatRelativeTime } from '../lib/format';
 
@@ -69,7 +68,8 @@ export const STATUS_CONFIG: Record<
   },
 };
 
-const STEPS = ['Бүртгэгдсэн', 'Синк', 'Бэлтгэл', 'Хүргэлт', 'Хүлээлгэн өгсөн'];
+/** Явцын шатны богино шошго — 5 багана нарийн дэлгэцэнд багтах ёстой */
+const STEPS = ['Бүртгэл', 'Синк', 'Бэлтгэл', 'Хүргэлт', 'Хүлээлцсэн'];
 
 function OrderCard({ order, onClick }: { order: Order; onClick: () => void }) {
   const statusConfig = STATUS_CONFIG[order.status];
@@ -122,7 +122,7 @@ function OrderCard({ order, onClick }: { order: Order; onClick: () => void }) {
             {STEPS.map((step, index) => (
               <span
                 key={step}
-                className={`flex-1 text-center text-[8px] font-bold leading-tight ${
+                className={`min-w-0 flex-1 px-0.5 text-center text-[10px] font-bold leading-tight ${
                   statusConfig.step >= index ? 'text-emerald-600' : 'text-text-subtle'
                 }`}
               >
@@ -196,8 +196,7 @@ export function OrdersScreen() {
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
 
-  const account = useAuthStore((state) => state.account);
-  const orders = useOrderStore((state) => state.orders);
+  const myOrders = useVisibleOrders();
   const isSyncingFromChef = useOrderStore((state) => state.isSyncingFromChef);
   const syncFromChef = useOrderStore((state) => state.syncFromChef);
 
@@ -212,7 +211,6 @@ export function OrdersScreen() {
     showToast('Захиалгын жагсаалт шинэчлэгдлээ.', 'success');
   };
 
-  const myOrders = orders.filter((order) => order.userId === (account?.id ?? null));
   const activeOrders = myOrders.filter(
     (order) => order.status !== 'delivered' && order.status !== 'cancelled'
   );

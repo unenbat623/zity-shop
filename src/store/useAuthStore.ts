@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AuthAccount, DeliveryAddress, UserProfile } from '../types';
 import { AuthError, SupabaseAuthService } from '../services/supabaseAuthService';
-import { setAuthTokenProvider } from '../services/apiClient';
+import { setAuthTokenProvider, setUnauthorizedHandler } from '../services/apiClient';
 import { isAdminEmail, isSupabaseConfigured } from '../lib/env';
 
 /**
@@ -49,6 +49,11 @@ interface AuthState {
   status: AuthStatus;
   authError: string | null;
   infoMessage: string | null;
+  /**
+   * Нууц үг сэргээх холбоосоор орж ирсэн — шинэ нууц үг тавих ёстой.
+   * Энэ үед `/login` дээр "шинэ нууц үг" форм харагдана.
+   */
+  needsPasswordReset: boolean;
   /** Хэрэглэгч бүрийн локал өгөгдөл: userId → data */
   userData: Record<string, LocalUserData>;
 
@@ -71,6 +76,8 @@ interface AuthState {
     phone?: string
   ) => Promise<{ ok: boolean; needsEmailConfirmation: boolean }>;
   sendPasswordReset: (email: string) => Promise<boolean>;
+  /** Сэргээх холбоосоор орж ирсэн хэрэглэгчийн шинэ нууц үгийг хадгална */
+  updatePassword: (password: string) => Promise<boolean>;
   updateProfile: (updates: { name?: string; phone?: string }) => Promise<boolean>;
   signOut: () => Promise<void>;
   clearMessages: () => void;
@@ -103,6 +110,7 @@ export const useAuthStore = create<AuthState>()(
       status: 'idle',
       authError: null,
       infoMessage: null,
+      needsPasswordReset: false,
       userData: {},
 
       isAuthenticated: () => get().account !== null,
@@ -158,6 +166,8 @@ export const useAuthStore = create<AuthState>()(
             set({ account: null, status: 'guest' });
             return;
           }
+
+          subscribeToAuthChanges();
 
           const { hadAuthPayload } = SupabaseAuthService.inspectRedirect();
           const pendingRedirect = SupabaseAuthService.takePendingOAuthRedirect();
@@ -276,6 +286,25 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      updatePassword: async (password) => {
+        set({ authError: null, infoMessage: null });
+        try {
+          const account = await SupabaseAuthService.updatePassword(password);
+          set({
+            account: account ?? get().account,
+            status: 'authenticated',
+            needsPasswordReset: false,
+            infoMessage: 'Нууц үг амжилттай солигдлоо.',
+          });
+          return true;
+        } catch (error) {
+          set({
+            authError: error instanceof Error ? error.message : 'Нууц үг солиход алдаа гарлаа.',
+          });
+          return false;
+        }
+      },
+
       updateProfile: async (updates) => {
         const { account } = get();
         if (!account) return false;
@@ -296,7 +325,13 @@ export const useAuthStore = create<AuthState>()(
 
       signOut: async () => {
         await SupabaseAuthService.signOut();
-        set({ account: null, status: 'guest', authError: null, infoMessage: 'Системээс гарлаа.' });
+        set({
+          account: null,
+          status: 'guest',
+          authError: null,
+          needsPasswordReset: false,
+          infoMessage: 'Системээс гарлаа.',
+        });
       },
 
       clearMessages: () => set({ authError: null, infoMessage: null }),
@@ -420,6 +455,82 @@ setAuthTokenProvider(async () => {
   const session = await SupabaseAuthService.getValidSession();
   return session?.accessToken ?? null;
 });
+
+/**
+ * Chef API 401 буцаавал session хүчингүй болсон гэсэн үг.
+ *
+ * Хуучин token-той үлдвэл дэлгэц болгон чимээгүй хоосон болж, хэрэглэгч
+ * "юу ч ачаалагдахгүй байна" гэж эргэлздэг. Тодорхой мессежтэйгээр зочин
+ * төлөвт буулгаж, дахин нэвтрэх боломж өгнө.
+ */
+setUnauthorizedHandler(() => {
+  const { account } = useAuthStore.getState();
+  if (!account) return;
+
+  void (async () => {
+    /**
+     * 401 бүр "session дууссан" гэсэн үг БИШ.
+     *
+     * Chef backend нь эрх хүрэлцэхгүй үед (жишээ нь admin биш хэрэглэгч
+     * `/chef/dashboard` дуудахад) мөн 401 буцааж болно. Тэр бүрд хэрэглэгчийг
+     * гаргавал энгийн хэрэглэгч admin хуудас нээгээд л системээс шидэгдэнэ.
+     *
+     * Тиймээс Supabase-ээс session-ыг дахин асууна — хүчинтэй хэвээр бол
+     * асуудал нь эрхийнх, нэвтрэлтийнх биш тул хөндөхгүй.
+     */
+    const session = await SupabaseAuthService.getValidSession();
+    if (session) return;
+
+    await SupabaseAuthService.signOut();
+    useAuthStore.setState({
+      account: null,
+      status: 'guest',
+      authError: 'Нэвтрэлтийн хугацаа дууссан байна. Дахин нэвтэрнэ үү.',
+    });
+  })();
+});
+
+/**
+ * Supabase-ийн session өөрчлөлтийг сонсох (нэг л удаа бүртгэнэ).
+ *
+ * Үүнгүйгээр: refresh token хүчингүй болох, өөр таб дээр гарах, Zity Chef дээр
+ * гарах — эдгээрийн аль нь ч энэ аппад мэдэгдэхгүй өнгөрдөг байв.
+ */
+let authChangeUnsubscribe: (() => void) | null = null;
+
+function subscribeToAuthChanges(): void {
+  if (authChangeUnsubscribe) return;
+
+  authChangeUnsubscribe = SupabaseAuthService.onAuthStateChange((account, event) => {
+    // Сэргээх холбоосоор орж ирсэн — session үүссэн ч нууц үгээ солих ёстой
+    if (event === 'PASSWORD_RECOVERY') {
+      useAuthStore.setState({
+        account,
+        status: account ? 'authenticated' : 'guest',
+        needsPasswordReset: true,
+        infoMessage: 'Шинэ нууц үгээ оруулна уу.',
+      });
+      return;
+    }
+
+    if (event === 'SIGNED_OUT') {
+      useAuthStore.setState({ account: null, status: 'guest', needsPasswordReset: false });
+      return;
+    }
+
+    /**
+     * `loading` үед эвентийг үл тоомсорлоно.
+     *
+     * `initialize()` болон `signInWithPassword()` хоёул төлвөө өөрсдөө барьдаг —
+     * дундуур нь оролцвол OAuth-ийн алдааг харуулахаас өмнө төлөв солигдож,
+     * хэрэглэгч юу болсныг мэдэхгүй үлддэг.
+     */
+    const { status } = useAuthStore.getState();
+    if (status === 'idle' || status === 'loading') return;
+
+    useAuthStore.setState({ account, status: account ? 'authenticated' : 'guest' });
+  });
+}
 
 /**
  * Хэрэглэгчийн профайлыг component дотор ашиглах hook.

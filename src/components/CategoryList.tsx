@@ -91,7 +91,7 @@ export function CategoryList() {
               >
                 {category.name.split(',')[0]}
               </span>
-              {count > 0 && <span className="font-mono text-[9px] text-text-subtle">{count}</span>}
+              {count > 0 && <span className="font-mono text-[10px] text-text-subtle">{count}</span>}
             </button>
           );
         })}

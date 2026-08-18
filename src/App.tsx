@@ -43,8 +43,13 @@ const LoginScreen = lazy(() =>
 const NotFoundScreen = lazy(() =>
   import('./screens/NotFoundScreen').then((m) => ({ default: m.NotFoundScreen }))
 );
+const TermsScreen = lazy(() => import('./screens/TermsScreen').then((m) => ({ default: m.TermsScreen })));
+const PrivacyScreen = lazy(() =>
+  import('./screens/PrivacyScreen').then((m) => ({ default: m.PrivacyScreen }))
+);
 
 import { RequireAuth } from './components/RequireAuth';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastHost } from './components/ui/ToastHost';
 
 import { useThemeStore } from './store/useThemeStore';
@@ -96,6 +101,7 @@ export default function App() {
   }, [loadProducts]);
 
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <ScrollToTop />
 
@@ -106,6 +112,10 @@ export default function App() {
         <Route path="/recipe-kits" element={<RecipeKitsScreen />} />
         <Route path="/cart" element={<CartScreen />} />
         <Route path="/login" element={<LoginScreen />} />
+
+        {/* Хууль эрх зүйн хуудсууд — нэвтрэхээс ӨМНӨ уншиж чаддаг байх ёстой */}
+        <Route path="/terms" element={<TermsScreen />} />
+        <Route path="/privacy" element={<PrivacyScreen />} />
 
         {/* Нэвтрэлт шаардсан хуудсууд */}
         <Route
@@ -165,5 +175,6 @@ export default function App() {
 
       <ToastHost />
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }

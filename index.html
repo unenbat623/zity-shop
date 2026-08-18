@@ -32,16 +32,25 @@
     <!-- PWA Web Manifest -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Open Graph -->
+    <!--
+      Open Graph / Twitter — зурган болон хаягийн зам ЗААВАЛ абсолют байх ёстой.
+      Facebook, Twitter, Messenger зэрэг crawler-ууд харьцангуй замыг («/og-image.png»)
+      уншиж чаддаггүй тул холбоос хуваалцахад зураг огт гарахгүй байв.
+      Домэйн солигдвол энд болон `VITE_SITE_URL` дээр хамт шинэчилнэ.
+    -->
+    <link rel="canonical" href="https://zity-shop.vercel.app/" />
+
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Zity Shop" />
     <meta property="og:locale" content="mn_MN" />
+    <meta property="og:url" content="https://zity-shop.vercel.app/" />
     <meta property="og:title" content="Zity Shop — Хоол & Хүнсний Хүргэлт" />
     <meta
       property="og:description"
       content="Zity Chef-ийн жорын орцыг болон өдөр тутмын хүнсийг 30 минутад авна уу."
     />
-    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image" content="https://zity-shop.vercel.app/og-image.png" />
+    <meta property="og:image:alt" content="Zity Shop — хүнсний хүргэлтийн платформ" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
 
@@ -49,7 +58,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Zity Shop — Хоол & Хүнсний Хүргэлт" />
     <meta name="twitter:description" content="Zity Chef-ийн жорын орц болон өдөр тутмын хүнс, 30 минутад." />
-    <meta name="twitter:image" content="/og-image.png" />
+    <meta name="twitter:image" content="https://zity-shop.vercel.app/og-image.png" />
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

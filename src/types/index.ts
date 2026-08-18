@@ -75,6 +75,14 @@ export interface RecipeBundle {
 
 export interface CartItem extends Product {
   quantity: number;
+  /**
+   * Каталогоос хасагдсан / олдохоо больсон бараа.
+   *
+   * Сагс localStorage-д хадгалагддаг тул хэдэн өдрийн өмнөх бараа дотор нь
+   * үлдэж болно. Тэмдэглэгээгүй бол хэрэглэгч байхгүй бараа захиалж, ажилтан
+   * биелүүлж чадахгүй захиалга авдаг.
+   */
+  isUnavailable?: boolean;
 }
 
 export type DeliveryMode = 'delivery' | 'pickup';

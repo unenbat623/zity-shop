@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronRight, Loader2, LogIn, LogOut, Moon, Sun, Wifi, WifiOff, X } from 'lucide-react';
@@ -7,10 +7,11 @@ import { ZityLogo } from './ui/ZityLogo';
 import { isNavItemActive, visibleNavItems } from './navigation';
 import { useAuthStore, useUserProfile } from '../store/useAuthStore';
 import { useCartStore } from '../store/useCartStore';
-import { useOrderStore } from '../store/useOrderStore';
+import { useActiveOrderCount } from '../store/useOrderStore';
 import { useCatalogStore } from '../store/useCatalogStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { formatMnt, getInitials } from '../lib/format';
+import { useDialogBehavior } from '../lib/useDialogBehavior';
 
 interface SidebarProps {
   /** Мобайл drawer нээлттэй эсэх (desktop дээр хамаарахгүй) */
@@ -31,16 +32,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const profile = useUserProfile();
 
   const totalItems = useCartStore((state) => state.getTotalItems());
-  const orders = useOrderStore((state) => state.orders);
+  // Купон нэмэх/хасахад тоо ширхэг өөрчлөгддөггүй тул дүнг ТУСАД нь захиална —
+  // `getState()`-ээр уншвал реактив биш болж, хуучин дүн харагдана
+  const cartTotal = useCartStore((state) => state.getTotalPrice());
   const connection = useCatalogStore((state) => state.connection);
   const { isDark, toggleTheme } = useThemeStore();
 
-  const activeOrders = orders.filter(
-    (order) =>
-      order.userId === (account?.id ?? null) &&
-      order.status !== 'delivered' &&
-      order.status !== 'cancelled'
-  ).length;
+  const activeOrders = useActiveOrderCount();
 
   const items = visibleNavItems({ isAdmin });
   const isChefLive = connection.status === 'live';
@@ -147,9 +145,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 className="mt-1 flex w-full items-center justify-between rounded-lg py-2 text-xs font-bold text-text-main hover:text-emerald-600"
               >
                 <span>Сагсанд {totalItems} бараа</span>
-                <span className="text-emerald-600">
-                  {formatMnt(useCartStore.getState().getTotalPrice())}
-                </span>
+                <span className="text-emerald-600">{formatMnt(cartTotal)}</span>
               </button>
             )}
           </div>
@@ -186,6 +182,17 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           )}
         </div>
 
+        {/* Хууль эрх зүйн холбоос — бүртгүүлэх дэлгэцээс гадна ч хүртээмжтэй байх ёстой */}
+        <div className="flex items-center justify-center gap-2 text-[10px] font-semibold text-text-subtle">
+          <button onClick={() => go('/terms')} className="px-1 py-1 hover:text-text-main hover:underline">
+            Үйлчилгээний нөхцөл
+          </button>
+          <span aria-hidden="true">·</span>
+          <button onClick={() => go('/privacy')} className="px-1 py-1 hover:text-text-main hover:underline">
+            Нууцлал
+          </button>
+        </div>
+
         {/* Холболтын төлөв. "unknown/checking" нь "офлайн" гэсэн үг биш —
             хараахан шалгаагүй гэсэн үг тул тусад нь харуулна. */}
         <div
@@ -218,23 +225,10 @@ export function Sidebar() {
 
 /** Мобайл/таблет дээр гарч ирдэг цэс */
 export function SidebarDrawer({ isOpen = false, onClose }: SidebarProps) {
-  // Drawer нээлттэй үед арын хуудсыг гүйлгэхгүй, Esc-ээр хаана
-  useEffect(() => {
-    if (!isOpen) return;
+  const panelRef = useRef<HTMLDivElement>(null);
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose?.();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, onClose]);
+  // Esc, scroll lock, focus trap, focus сэргээлт — Modal/BottomSheet-тэй ижил
+  useDialogBehavior({ isOpen, onClose: () => onClose?.(), panelRef });
 
   return (
     <AnimatePresence>
@@ -250,13 +244,15 @@ export function SidebarDrawer({ isOpen = false, onClose }: SidebarProps) {
           />
 
           <motion.div
+            ref={panelRef}
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="relative h-full w-72 max-w-[85vw] border-r border-border bg-surface shadow-2xl"
+            className="relative h-full w-72 max-w-[85vw] border-r border-border bg-surface shadow-2xl outline-none"
             role="dialog"
             aria-modal="true"
+            tabIndex={-1}
             aria-label="Навигацийн цэс"
           >
             <button

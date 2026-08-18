@@ -1,16 +1,15 @@
-import { ReactNode, useCallback, useEffect, useRef } from 'react';
+import { ReactNode, useId, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { X } from 'lucide-react';
+
+import { useDialogBehavior } from '../../lib/useDialogBehavior';
 
 /**
  * Бүх цонхны нэг суурь.
  *
- * Хангадаг зүйлс:
- *  - Esc товчоор хаах, backdrop дарж хаах
- *  - Арын хуудсыг гүйлгэхгүй болгох (scroll lock)
- *  - Focus trap: Tab дарахад focus цонхон дотор эргэлдэнэ
- *  - Цонх хаагдахад focus өмнөх элемент рүү буцна
- *  - Зөв ARIA шинжүүд (role=dialog, aria-modal, aria-labelledby)
+ * Esc, scroll lock, focus trap, focus сэргээлт нь `useDialogBehavior`-оос ирнэ —
+ * BottomSheet, drawer-тай яг ижил зан төлөвтэй байхын тулд.
+ * Энд зөвхөн харагдац болон ARIA шинжүүд.
  */
 
 interface ModalProps {
@@ -35,9 +34,6 @@ const SIZE_CLASS: Record<NonNullable<ModalProps['size']>, string> = {
   lg: 'max-w-lg',
 };
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 export function Modal({
   isOpen,
   onClose,
@@ -51,68 +47,9 @@ export function Modal({
   showCloseButton = true,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const previouslyFocused = useRef<HTMLElement | null>(null);
-  const titleId = useRef(`modal-title-${Math.random().toString(36).slice(2, 8)}`).current;
+  const titleId = useId();
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (event.key !== 'Tab') return;
-
-      const panel = panelRef.current;
-      if (!panel) return;
-
-      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (element) => element.offsetParent !== null
-      );
-      if (focusable.length === 0) {
-        event.preventDefault();
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      // Focus цонхноос гарахыг сэргийлж эхэн/хамгийн сүүлийн элемент рүү эргүүлнэ
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    },
-    [onClose]
-  );
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', handleKeyDown);
-
-    // Цонх нээгдэхэд дотрох эхний элемент рүү focus шилжүүлнэ
-    const focusTimer = window.setTimeout(() => {
-      const panel = panelRef.current;
-      const target = panel?.querySelector<HTMLElement>(FOCUSABLE) ?? panel;
-      target?.focus();
-    }, 50);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
-      window.clearTimeout(focusTimer);
-      previouslyFocused.current?.focus?.();
-    };
-  }, [isOpen, handleKeyDown]);
+  useDialogBehavior({ isOpen, onClose, panelRef });
 
   return (
     <AnimatePresence>

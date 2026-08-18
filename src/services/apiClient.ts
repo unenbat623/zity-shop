@@ -63,13 +63,33 @@ export function setAuthTokenProvider(provider: TokenProvider): void {
   tokenProvider = provider;
 }
 
+/**
+ * Нэвтрэлт хүчингүй болсныг мэдэгдэх дуудлага. Auth store бүртгэнэ.
+ *
+ * Refresh token хүчингүй болоход (нууц үг солигдсон, session цуцлагдсан) хуучин
+ * token-той хүсэлтүүд 401 өгдөг. Үүнийг барихгүй бол апп хэрэглэгчийг нэвтэрсэн
+ * гэж харуулсаар, дэлгэц бүр чимээгүй хоосон болно.
+ */
+type UnauthorizedHandler = (path: string) => void;
+
+let unauthorizedHandler: UnauthorizedHandler = () => undefined;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
+  unauthorizedHandler = handler;
+}
+
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   timeoutMs?: number;
   /** Гадны AbortSignal (жишээ нь component unmount) */
   signal?: AbortSignal;
-  /** Token байхгүй ч хүсэлт явуулах эсэх. Default: тийм. */
+  /**
+   * Нэвтрэлт заавал шаардах эсэх. Default: үгүй.
+   *
+   * `true` үед token байхгүй бол хүсэлт огт явуулахгүй шууд 401 өгнө, мөн сервер
+   * 401 буцаавал нэвтрэлт хүчингүй болсныг апп даяар мэдэгдэнэ.
+   */
   requireAuth?: boolean;
 }
 
@@ -111,6 +131,11 @@ export async function chefRequest<T>(path: string, options: RequestOptions = {})
     });
 
     if (!response.ok) {
+      // Нэвтрэлттэй хүсэлт 401 авсан = session хүчингүй болсон.
+      // Аппад мэдэгдэж, хэрэглэгчийг дахин нэвтрүүлнэ.
+      if (response.status === 401 && requireAuth) {
+        unauthorizedHandler(path);
+      }
       throw new ApiError('http', path, `HTTP ${response.status} ${response.statusText}`, response.status);
     }
 

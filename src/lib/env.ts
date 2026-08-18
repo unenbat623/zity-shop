@@ -11,11 +11,21 @@ function readString(key: keyof ImportMetaEnv, fallback = ''): string {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : fallback;
 }
 
+function readBoolean(key: keyof ImportMetaEnv, fallback: boolean): boolean {
+  const value = readString(key).toLowerCase();
+  if (value === 'true' || value === '1') return true;
+  if (value === 'false' || value === '0') return false;
+  return fallback;
+}
+
 export const IS_DEV = import.meta.env.DEV;
 
 export const env = {
   appName: readString('VITE_APP_NAME', 'Zity Delguur'),
   appEnv: readString('VITE_APP_ENV', IS_DEV ? 'development' : 'production'),
+
+  /** Апп-ын public хаяг — OG/canonical зэрэг абсолют URL шаарддаг газарт */
+  siteUrl: readString('VITE_SITE_URL', 'https://zity-shop.vercel.app').replace(/\/+$/, ''),
 
   /** Zity Chef backend-ийн public base URL */
   chefApiUrl: readString('VITE_ZITY_CHEF_API_URL', 'http://localhost:3002').replace(/\/+$/, ''),
@@ -43,7 +53,29 @@ export const env = {
     .split(',')
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean),
+
+  /**
+   * Демо горим — бодит интеграцгүй үед урсгалыг дуурайлгах.
+   *
+   * ЭНЭ НЬ PRODUCTION-Д УНТРААЛТТАЙ БАЙХ ЁСТОЙ. Асаалттай үед:
+   *   - онлайн төлбөр 1 секундын дараа "амжилттай" болно (бодит гүйлгээгүй)
+   *   - захиалгын явц цагаар өөрөө урагшилна (бодит хүргэлтгүй)
+   *   - Odoo bridge олдоогүй ч синк "амжилттай" мэт харагдана
+   *
+   * Тохируулаагүй бол dev дээр асаалттай, production дээр унтраалттай.
+   */
+  demoMode: readBoolean('VITE_DEMO_MODE', IS_DEV),
 } as const;
+
+/**
+ * Демо симуляц идэвхтэй эсэх.
+ *
+ * Хуурамч төлбөр, хуурамч хүргэлтийн явц зэрэг нь ЗӨВХӨН энэ тугийн ард ажиллана —
+ * production дээр санамсаргүйгээр хэрэглэгчийг "төлсөн" гэж бүртгэхээс сэргийлнэ.
+ */
+export function isDemoMode(): boolean {
+  return env.demoMode;
+}
 
 /** Supabase Auth ашиглах боломжтой эсэх */
 export function isSupabaseConfigured(): boolean {
@@ -109,12 +141,16 @@ export function isAdminRestrictionConfigured(): boolean {
 /**
  * Имэйл admin эрхтэй эсэх.
  *
- * `VITE_ADMIN_EMAILS` тохируулаагүй үед нэвтэрсэн дурын хэрэглэгч admin dashboard-г
- * үзэж чадна (тохиргооны өмнөх үе шат). Энэ тохиолдолд UI дээр анхааруулга гарна —
- * production дээр заавал жагсаалтаа тохируулах ёстой.
+ * `VITE_ADMIN_EMAILS` тохируулаагүй үед:
+ *   - dev дээр — нээлттэй (тохиргоо хийхээс өмнө ажиллуулах боломж), UI дээр анхааруулна
+ *   - production дээр — ХААЛТТАЙ. Тохиргоо мартагдсан нь бүх хэрэглэгчид admin
+ *     dashboard нээх шалтгаан болох ёсгүй.
+ *
+ * ⚠️ Энэ бол зөвхөн UI-г нуух давхарга. `VITE_*` хувьсагч bundle-д ил орох тул
+ * бодит хамгаалалт нь Chef backend-ийн `CHEF_ADMIN_EMAILS` болон Supabase RLS дээр байна.
  */
 export function isAdminEmail(email: string | undefined | null): boolean {
-  if (!isAdminRestrictionConfigured()) return true;
+  if (!isAdminRestrictionConfigured()) return IS_DEV;
   if (!email) return false;
   return env.adminEmails.includes(email.trim().toLowerCase());
 }

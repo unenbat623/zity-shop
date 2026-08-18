@@ -52,8 +52,9 @@ export function FridgeScreen() {
   return (
     <AppShell showSearch={false} title="Zity Chef хөргөгч" maxWidth="lg">
         <section className="zity-brand-surface mb-6 overflow-hidden rounded-3xl p-6 shadow-xl">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          {/* Нарийн дэлгэцэнд гарчиг, товч хоёр шахцалдахгүйн тулд босоо байрлана */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
               <span className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3 py-1 text-xs font-extrabold text-emerald-200">
                 <ChefHat className="h-4 w-4" /> Zity Chef хөргөгч
               </span>
@@ -65,7 +66,7 @@ export function FridgeScreen() {
 
             <button
               onClick={() => navigate(-1)}
-              className="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-[11px] font-bold text-white transition-colors hover:bg-white/20"
+              className="inline-flex w-fit shrink-0 items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-[11px] font-bold text-white transition-colors hover:bg-white/20"
             >
               <ArrowLeft className="h-4 w-4" /> Буцах
             </button>
@@ -190,7 +191,7 @@ function FridgeCard({ item }: { item: FridgeItem }) {
 
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         <div className="rounded-2xl border border-border bg-surface-hover p-2.5">
-          <div className="text-[9px] font-bold uppercase tracking-wide text-text-muted">Нөөц</div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-text-muted">Нөөц</div>
           <div className="mt-1 flex items-center justify-between gap-1">
             <span className="text-sm font-extrabold text-text-main">
               {item.quantity} {item.unit}
@@ -216,7 +217,7 @@ function FridgeCard({ item }: { item: FridgeItem }) {
           </div>
         </div>
         <div className="rounded-2xl border border-border bg-surface-hover p-2.5">
-          <div className="text-[9px] font-bold uppercase tracking-wide text-text-muted">Хадгалах</div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-text-muted">Хадгалах</div>
           <div className={`mt-1 text-sm font-extrabold ${expiry.className}`}>{expiry.label}</div>
         </div>
       </div>

@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
           navigateFallback: '/index.html',
+          // API дуудлагыг index.html-ээр орлуулж болохгүй — JSON хүлээж байгаа
+          // код HTML хүлээж авбал "уншиж чадсангүй" гэсэн ойлгомжгүй алдаа өгнө
+          navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
             {
               // Google Fonts — тогтвортой, удаан хадгалж болно
@@ -43,13 +46,23 @@ export default defineConfig(({ mode }) => {
                * Chef API — ҮРГЭЛЖ сүлжээнээс. Нөөц, үнэ, захиалгын төлөв
                * хуучирвал буруу мэдээлэл харуулна. Сүлжээгүй үед л cache-ээс
                * түр үзүүлнэ.
+               *
+               * Замыг домэйны ЯГ АРД нь бэхэлнэ (`https://host/api/...`). Өмнөх
+               * `/\/api\//` загвар нь зам дунд `/api/` агуулсан дурын гуравдагч
+               * талын хаягийг ч барьдаг байв.
+               *
+               * dev  → /api/zity-chef/...
+               * prod → https://zity-chef.vercel.app/api/...
                */
-              urlPattern: /\/api\/.*/i,
+              urlPattern: /^https?:\/\/[^/]+\/api\//i,
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'chef-api',
                 networkTimeoutSeconds: 5,
                 expiration: { maxEntries: 40, maxAgeSeconds: 60 * 5 },
+                // Opaque (status 0) хариуг cache-лэхгүй — агуулгыг нь шалгах
+                // боломжгүй тул хоосон/алдаатай хариу хадгалагдах эрсдэлтэй
+                cacheableResponse: { statuses: [200] },
               },
             },
           ],

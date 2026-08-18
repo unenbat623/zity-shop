@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ChefHat,
@@ -46,10 +46,12 @@ export function LoginScreen() {
     authError,
     infoMessage,
     account,
+    needsPasswordReset,
     signInWithGoogle,
     signInWithPassword,
     signUpWithPassword,
     sendPasswordReset,
+    updatePassword,
     clearMessages,
   } = useAuthStore();
 
@@ -62,6 +64,33 @@ export function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
+  const handleSetNewPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    if (isBusy) return;
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setErrors({ password: `Нууц үг хамгийн багадаа ${MIN_PASSWORD_LENGTH} тэмдэгт байна.` });
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setErrors({ confirmPassword: 'Нууц үг таарахгүй байна.' });
+      return;
+    }
+
+    setErrors({});
+    setIsSubmitting(true);
+    const ok = await updatePassword(newPassword);
+    setIsSubmitting(false);
+
+    if (ok) {
+      setNewPassword('');
+      setConfirmNewPassword('');
+    }
+  };
 
   const configError = getSupabaseConfigError();
   const isConfigured = isSupabaseConfigured();
@@ -83,12 +112,18 @@ export function LoginScreen() {
     return from && from !== '/login' ? from : '/profile';
   }, [location.state]);
 
-  // Нэвтэрсэн бол буцаж ирсэн хуудас руугаа шилжинэ
+  /**
+   * Нэвтэрсэн бол буцаж ирсэн хуудас руугаа шилжинэ.
+   *
+   * Нууц үг сэргээх холбоосоор орж ирэхэд Supabase түр session үүсгэдэг тул
+   * `account` бөглөгдөнө. Тэр үед шилжүүлбэл хэрэглэгч нууц үгээ солилгүйгээр
+   * дотогш ороод, хуучин нууц үгтэйгээ үлддэг — тиймээс энд хүлээнэ.
+   */
   useEffect(() => {
-    if (account) {
+    if (account && !needsPasswordReset) {
       navigate(redirectTo, { replace: true });
     }
-  }, [account, navigate, redirectTo]);
+  }, [account, needsPasswordReset, navigate, redirectTo]);
 
   // Store-оос ирсэн мессежийг toast болгож харуулна
   useEffect(() => {
@@ -169,15 +204,67 @@ export function LoginScreen() {
                 <ChefHat className="h-3.5 w-3.5" /> Zity Chef × Delguur
               </span>
               <h1 className="text-xl font-black text-white">
-                {tab === 'signin' ? 'Бүртгэлээрээ нэвтрэх' : 'Шинэ бүртгэл үүсгэх'}
+                {needsPasswordReset
+                  ? 'Шинэ нууц үг тавих'
+                  : tab === 'signin'
+                    ? 'Бүртгэлээрээ нэвтрэх'
+                    : 'Шинэ бүртгэл үүсгэх'}
               </h1>
               <p className="mt-2 text-xs leading-relaxed text-emerald-100/80">
-                Нэг бүртгэлээр Zity Chef жор, Delguur захиалга, хөргөгчийн нөөц, хүргэлтийн хаягаа нэгтгэнэ.
+                {needsPasswordReset
+                  ? 'Сэргээх холбоосыг баталгаажууллаа. Шинэ нууц үгээ оруулна уу.'
+                  : 'Нэг бүртгэлээр Zity Chef жор, Delguur захиалга, хөргөгчийн нөөц, хүргэлтийн хаягаа нэгтгэнэ.'}
               </p>
             </div>
             <ChefHat className="pointer-events-none absolute -right-6 -top-6 h-32 w-32 rotate-12 text-white/10" />
           </div>
 
+          {/* Нууц үг сэргээх — өөр бүх зүйлийг нуугаад зөвхөн энэ алхмыг харуулна */}
+          {needsPasswordReset ? (
+            <form onSubmit={handleSetNewPassword} className="space-y-3 p-5" noValidate>
+              <Field
+                id="new-password"
+                label="Шинэ нууц үг"
+                icon={Lock}
+                type={showPassword ? 'text' : 'password'}
+                error={errors.password}
+                value={newPassword}
+                onChange={setNewPassword}
+                placeholder="••••••••"
+                autoComplete="new-password"
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-text-muted transition-colors hover:text-text-main"
+                    aria-label={showPassword ? 'Нууц үг нуух' : 'Нууц үг харуулах'}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                }
+              />
+
+              <Field
+                id="confirm-new-password"
+                label="Шинэ нууц үг давтах"
+                icon={Lock}
+                type={showPassword ? 'text' : 'password'}
+                error={errors.confirmPassword}
+                value={confirmNewPassword}
+                onChange={setConfirmNewPassword}
+                placeholder="••••••••"
+                autoComplete="new-password"
+              />
+
+              <button type="submit" disabled={isBusy} className="zity-btn-primary w-full py-3.5 text-sm">
+                {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Нууц үг хадгалах'}
+              </button>
+
+              <p className="text-center text-[10px] leading-relaxed text-text-subtle">
+                Хадгалсны дараа шинэ нууц үгээрээ бүх төхөөрөмж дээр нэвтэрнэ.
+              </p>
+            </form>
+          ) : (
           <div className="space-y-4 p-5">
             {/* Тохиргоо дутуу үеийн анхааруулга */}
             {configError && (
@@ -332,8 +419,16 @@ export function LoginScreen() {
             </form>
 
             {tab === 'signup' && (
-              <p className="text-center text-[10px] leading-relaxed text-text-subtle">
-                Бүртгүүлснээр Zity Delguur-ийн үйлчилгээний нөхцөл, нууцлалын бодлогыг зөвшөөрч байгаа болно.
+              <p className="text-center text-[11px] leading-relaxed text-text-subtle">
+                Бүртгүүлснээр Zity Shop-ийн{' '}
+                <Link to="/terms" className="font-bold text-emerald-600 hover:underline">
+                  Үйлчилгээний нөхцөл
+                </Link>
+                ,{' '}
+                <Link to="/privacy" className="font-bold text-emerald-600 hover:underline">
+                  Нууцлалын бодлого
+                </Link>
+                -ыг зөвшөөрч байгаа болно.
               </p>
             )}
 
@@ -387,6 +482,7 @@ export function LoginScreen() {
               </div>
             )}
           </div>
+          )}
         </section>
       </AppShell>
   );

@@ -40,7 +40,24 @@ Odoo ERP-тэй нэгдсэн design system болон нэгдсэн хэрэ�
 - Odoo болон Chef рүү **зэрэг** синк — аль нэг нь унасан ч захиалга алдагдахгүй
 - Синкийн төлөв захиалга тус бүрт харагдана, амжилтгүй бол **дахин илгээх** товч
 - Бэлнээр төлөх захиалга хүргэгдэх үед л "төлөгдсөн" болно
-- Захиалгын явц `createdAt`-аас тооцогддог тул хуудас сэргээхэд ч зөв үргэлжилнэ
+- Захиалгын дугаар давхцахгүй; түүх 50-аар хязгаарлагдана (localStorage хамгаалалт)
+- Хэрэглэгч солигдоход өмнөх хүний захиалга төхөөрөмжөөс цэвэрлэгдэнэ
+
+### ⚠️ Демо горим (`VITE_DEMO_MODE`)
+- Онлайн төлбөр, захиалгын явц, Odoo синк гурав нь бодит интеграцгүй үед
+  **симуляцаар** ажилладаг. Эдгээр нь `VITE_DEMO_MODE` тугийн ард байна
+- Тохируулаагүй бол: **dev дээр асаалттай, production дээр унтраалттай**
+- Демо унтарсан үед: онлайн төлбөр идэвхгүй (зөвхөн бэлнээр), захиалгын төлөв
+  зөвхөн Chef DB-ээс ирнэ, Odoo bridge олдоогүй бол синк илэн далангүй "амжилтгүй"
+- Production дээр `true` болгож **хэзээ ч болохгүй** — мөнгө төлөөгүй захиалга
+  төлөгдсөнд тооцогдоно
+
+### 📄 Хууль эрх зүй
+- `/terms` — Үйлчилгээний нөхцөл, `/privacy` — Нууцлалын бодлого
+- Бүртгүүлэх дэлгэц болон sidebar-аас холбогдоно, sitemap-д индексжинэ
+- ⚠️ [`src/constants/legal.ts`](src/constants/legal.ts) доторх компанийн бүртгэлийн
+  дугаар, хаяг, утсыг **deploy хийхээс өмнө** бодит мэдээллээр солино. Текст нь
+  загвар тул хуульчаар хянуулах шаардлагатай
 
 ### 🎨 Design system & UI
 - Өөрийн лого (тогоочийн малгай + Z + навч), бүрэн PWA icon багц, OG зураг
@@ -48,7 +65,9 @@ Odoo ERP-тэй нэгдсэн design system болон нэгдсэн хэрэ�
 - Theme сонголт хадгалагдана, OS-ийн тохиргоог дагах "system" горимтой
 - `AppShell` — бүх хуудас нэг бүрхүүлтэй: desktop дээр байнгын sidebar,
   мобайл дээр drawer + доод цэс; padding/өргөн хаана ч ижил
-- Нэг `Modal` суурь — Esc, backdrop, focus trap, focus сэргээлт, зөв ARIA
+- Modal, BottomSheet, drawer гурав нэг `useDialogBehavior` hook-оос ижил зан төлөв
+  авна — Esc, scroll lock, focus trap, focus сэргээлт, зөв ARIA
+- `ErrorBoundary` — render алдаа гарвал цагаан дэлгэц биш, дахин ачаалах гарц
 - Toast мэдэгдэл, skeleton ачаалалт, хоосон төлөвийн ойлгомжтой заавар
 - `prefers-reduced-motion` дэмжлэг, гарнаас удирдах focus ring, aria шошго
 
@@ -98,7 +117,7 @@ cd ../zity-delguur-app && npm run dev
 | --- | --- |
 | Zity Delguur | https://zity-shop.vercel.app |
 | Zity Chef (UI + API) | https://zity-chef.vercel.app |
-
+ 
 Deploy хийхийн өмнө гурван зүйлийг тохируулна:
 
 1. **Delguur Vercel env** — `VITE_ZITY_CHEF_API_URL=https://zity-chef.vercel.app`
@@ -106,6 +125,18 @@ Deploy хийхийн өмнө гурван зүйлийг тохируулна:
 3. **Chef `ALLOWED_ORIGINS`** — `https://zity-shop.vercel.app` нэмэх (CORS)
 
 Алхам бүрийн дэлгэрэнгүйг [`docs/chef-backend-env.md`](docs/chef-backend-env.md)-ээс үзнэ үү.
+
+### Production checklist
+
+Deploy хийхээсээ өмнө [`docs/production-audit.md`](docs/production-audit.md)-г үзнэ үү.
+Хамгийн чухал 4 зүйл:
+
+| Юу | Хаана | Яагаад |
+| --- | --- | --- |
+| `VITE_DEMO_MODE=false` | Vercel env | Хуурамч төлбөр, хуурамч хүргэлтийг хаана |
+| `VITE_ADMIN_EMAILS` | Vercel env | Тохируулаагүй бол admin dashboard бүрэн хаагдана |
+| Supabase Redirect URLs | Supabase dashboard | Байхгүй бол нэвтрэлт Chef рүү буцна |
+| Chef `ALLOWED_ORIGINS` | Chef backend env | CORS |
 
 ### Тохиргоо
 
@@ -145,8 +176,9 @@ npm run preview    # build-ийг урьдчилан үзэх
 ```
 src/
 ├── lib/
-│   ├── env.ts            # орчны хувьсагчийн нэг цэгийн хандалт + шалгалт
-│   ├── format.ts         # mn-MN мөнгө/огноо форматлагч
+│   ├── env.ts               # орчны хувьсагч + демо горим + admin эрхийн шалгалт
+│   ├── format.ts            # mn-MN мөнгө/огноо форматлагч
+│   ├── useDialogBehavior.ts # Esc / scroll lock / focus trap — бүх давхаргад нэг
 │   └── utils.ts
 ├── services/
 │   ├── apiClient.ts      # timeout + auth token + нэгдсэн алдаатай fetch
@@ -155,7 +187,7 @@ src/
 │   └── odooService.ts    # bridge / симуляц горим
 ├── store/                # zustand: auth, catalog, cart, order, odoo, theme, toast, search
 │   └── *.test.ts         # цэвэр логикийн тестүүд
-├── components/           # Header, BottomNav, ProductCard, RequireAuth, ui/*
+├── components/           # Header, BottomNav, ProductCard, RequireAuth, ErrorBoundary, ui/*
 ├── screens/              # хуудас бүр
 └── types/                # нэгдсэн TypeScript интерфейс
 ```
@@ -173,6 +205,14 @@ src/
 - Google OAuth client secret → Supabase dashboard дээр
 
 Admin dashboard дээр эдгээрийг оруулах талбар байхгүй — зөвхөн тохиргооны заавар харагдана.
+
+`VITE_ADMIN_EMAILS` нь мөн browser-т ил орох тул энэ нь зөвхөн **UI-г нуух** давхарга.
+Бодит хамгаалалт нь Chef backend-ийн `CHEF_ADMIN_EMAILS` болон Supabase RLS дээр байна.
+Тохируулаагүй бол production дээр `/odoo-admin` бүрэн хаагдана (fail-closed).
+
+Мөн анхаарах: купон, нийт дүн одоогоор client талд тооцогддог тул **backend дээр
+дахин баталгаажуулах шаардлагатай**. Дэлгэрэнгүйг
+[`docs/production-audit.md`](docs/production-audit.md).
 
 ---
 

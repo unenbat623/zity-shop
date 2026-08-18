@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { X } from 'lucide-react';
+
+import { useDialogBehavior } from '../../lib/useDialogBehavior';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -10,22 +12,10 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetProps) {
-  useEffect(() => {
-    if (!isOpen) return;
+  const panelRef = useRef<HTMLDivElement>(null);
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, onClose]);
+  // Esc, scroll lock, focus trap, focus сэргээлт — Modal-той ижил зан төлөв
+  useDialogBehavior({ isOpen, onClose, panelRef });
 
   return (
     <AnimatePresence>
@@ -46,14 +36,16 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
           />
 
           <motion.div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
+            tabIndex={-1}
             aria-label={title || 'Дэлгэрэнгүй'}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="absolute inset-x-0 bottom-0 flex max-h-[90vh] flex-col rounded-t-3xl border-t border-border bg-surface shadow-xl"
+            className="absolute inset-x-0 bottom-0 flex max-h-[90vh] flex-col rounded-t-3xl border-t border-border bg-surface shadow-xl outline-none"
           >
             <div className="flex w-full items-center justify-center pb-2 pt-3">
               <span className="h-1.5 w-12 rounded-full bg-border" />

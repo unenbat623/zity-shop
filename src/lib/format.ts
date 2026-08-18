@@ -24,6 +24,13 @@ export function formatDateTime(iso: string): string {
   }).format(date);
 }
 
+/** ISO огноо → "2026.08.19" (цаггүй) */
+export function formatDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('mn-MN', { dateStyle: 'medium' }).format(date);
+}
+
 /** ISO огноо → "14:30" */
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return '—';
