@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
@@ -12,6 +13,7 @@ import { odooService } from '../services/odooService';
 import { ZityChefService } from '../services/zityChefService';
 import { useAuthStore } from './useAuthStore';
 import { useCatalogStore } from './useCatalogStore';
+import { isDemoMode } from '../lib/env';
 
 /**
  * Захиалгын төлөв.
@@ -22,12 +24,22 @@ import { useCatalogStore } from './useCatalogStore';
  * бөгөөд дахин оролдох боломжтой.
  */
 
-/** Захиалгын явцын симуляц — захиалга үүссэнээс хойших хугацаа (ms) */
+/**
+ * Захиалгын явцын СИМУЛЯЦ — зөвхөн демо горимд.
+ *
+ * ⚠️ Production дээр энэ ХЭЗЭЭ Ч ажиллахгүй. Бодит хүргэлт хийгдээгүй байхад
+ * захиалгыг "хүргэгдсэн" болгож, бэлнээр төлөх захиалгыг "төлөгдсөн" гэж
+ * бүртгэх нь орлогын тайланг худал болгоно. Бодит төлөв нь Chef DB-ээс
+ * (`syncFromChef`) ирнэ.
+ */
 const PROGRESS_TIMELINE: { status: OrderStatus; afterMs: number }[] = [
   { status: 'packing', afterMs: 30_000 },
   { status: 'shipping', afterMs: 120_000 },
   { status: 'delivered', afterMs: 420_000 },
 ];
+
+/** localStorage хэт томроход хадгалалт бүтэлгүйтдэг — түүхийг хязгаарлана */
+const MAX_STORED_ORDERS = 50;
 
 const STATUS_ORDER: OrderStatus[] = ['pending', 'odoo_synced', 'packing', 'shipping', 'delivered'];
 
@@ -68,13 +80,57 @@ interface OrderState {
   getVisibleOrders: (userId: string | null) => Order[];
 }
 
-function createOrderId(): string {
+/**
+ * Нэг сессийн дотор дугаар давхцахгүй байхыг баталгаажуулах тоолуур.
+ *
+ * Санамсаргүй тэмдэгт дангаараа хангалтгүй: нэг миллисекундэд олон захиалга
+ * үүсэхэд (тест, багц импорт) төрсөн өдрийн парадоксоор давхцал гарна.
+ * Тоолуур нь тэр цонхонд ялгааг БАТАЛГААТАЙ хангана.
+ */
+let orderSequence = 0;
+
+/**
+ * Захиалгын дугаар: `ORD-ГГГГССӨӨ-<цаг><дараалал><санамсаргүй>`.
+ *
+ * Өмнө нь `Date.now().toString(36).slice(-4)` ашигладаг байсан — 4 тэмдэгт base36
+ * нь 36⁴ ≈ 1.68 сая мс буюу ~28 минут тутам давтагддаг тул нэг өдрийн дотор
+ * хоёр захиалга ижил дугаартай болох бүрэн боломжтой байв. Ижил дугаартай
+ * захиалга нь `getOrderById` дээр буруу захиалга буцаах, Odoo дээр давхардсан
+ * `sale.order` үүсэх зэрэг замаар аюултай.
+ *
+ * Одоо гурван бүрэлдэхүүн: цагийн тамга (өдөр хооронд), дараалал (нэг сессийн
+ * дотор баталгаатай), санамсаргүй хэсэг (олон таб/төхөөрөмж хооронд).
+ */
+export function createOrderId(): string {
   const now = new Date();
   const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
     now.getDate()
   ).padStart(2, '0')}`;
-  const unique = now.getTime().toString(36).slice(-4).toUpperCase();
-  return `ORD-${stamp}-${unique}`;
+
+  const time = now.getTime().toString(36).toUpperCase().slice(-5);
+  const sequence = (orderSequence++).toString(36).toUpperCase().padStart(3, '0').slice(-3);
+  const random = Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0');
+
+  return `ORD-${stamp}-${time}${sequence}${random}`;
+}
+
+/**
+ * Захиалгын түүхийг хязгаарлана.
+ *
+ * Захиалга бүр барааны бүтэн хуулбарыг (зураг, тайлбар) агуулдаг тул localStorage
+ * (~5MB) хэдэн зуун захиалгын дараа дүүрч, хадгалалт чимээгүй бүтэлгүйтдэг.
+ * Идэвхтэй захиалгыг үргэлж хадгалж, зөвхөн хаагдсан хуучныг л хасна.
+ */
+export function trimOrders(orders: Order[]): Order[] {
+  if (orders.length <= MAX_STORED_ORDERS) return orders;
+
+  const isClosed = (order: Order) => order.status === 'delivered' || order.status === 'cancelled';
+  const active = orders.filter((order) => !isClosed(order));
+  const closed = orders.filter(isClosed);
+
+  return [...active, ...closed.slice(0, Math.max(0, MAX_STORED_ORDERS - active.length))].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 }
 
 function statusRank(status: OrderStatus): number {
@@ -122,7 +178,7 @@ export const useOrderStore = create<OrderState>()(
           chefSync: { status: 'pending' },
         };
 
-        set((state) => ({ orders: [newOrder, ...state.orders] }));
+        set((state) => ({ orders: trimOrders([newOrder, ...state.orders]) }));
 
         // Odoo болон Chef рүү зэрэг синк — аль нэг нь унасан ч нөгөө нь үргэлжилнэ
         const [odooResult, chefResult] = await Promise.allSettled([
@@ -246,20 +302,32 @@ export const useOrderStore = create<OrderState>()(
               .pushOrderToOdoo(order)
               .then((result) => {
                 set((state) => ({
-                  orders: state.orders.map((item) =>
-                    item.id === id
-                      ? {
-                          ...item,
-                          odooOrderRef: result.odooOrderRef,
-                          odooSync: {
-                            status: 'success',
-                            message: `Odoo sale.order үүслээ: ${result.odooOrderRef}`,
-                            syncedAt: new Date().toISOString(),
-                          },
-                          status: statusRank(item.status) < 1 ? 'odoo_synced' : item.status,
-                        }
-                      : item
-                  ),
+                  orders: state.orders.map((item) => {
+                    if (item.id !== id) return item;
+
+                    // Амжилтгүй бол хуучин "failed" төлвөө хадгална — дахин
+                    // оролдох товч алга болж, хэрэглэгч зассан гэж бодохоос сэргийлнэ
+                    if (!result.success) {
+                      return {
+                        ...item,
+                        odooSync: {
+                          status: 'failed' as const,
+                          message: 'Odoo ERP рүү дахин илгээх оролдлого амжилтгүй боллоо.',
+                        },
+                      };
+                    }
+
+                    return {
+                      ...item,
+                      odooOrderRef: result.odooOrderRef,
+                      odooSync: {
+                        status: 'success' as const,
+                        message: `Odoo sale.order үүслээ: ${result.odooOrderRef}`,
+                        syncedAt: new Date().toISOString(),
+                      },
+                      status: statusRank(item.status) < 1 ? ('odoo_synced' as OrderStatus) : item.status,
+                    };
+                  }),
                 }));
               })
               .catch(() => undefined)
@@ -349,7 +417,11 @@ export const useOrderStore = create<OrderState>()(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
 
-          return { orders: all, isSyncingFromChef: false, chefOrdersFetchedAt: Date.now() };
+          return {
+            orders: trimOrders(all),
+            isSyncingFromChef: false,
+            chefOrdersFetchedAt: Date.now(),
+          };
         });
       },
 
@@ -361,6 +433,9 @@ export const useOrderStore = create<OrderState>()(
        * `createdAt`-аас тооцдог тул reload хийсэн ч зөв үргэлжилнэ.
        */
       startTracking: () => {
+        // Production дээр захиалгын төлвийг зөвхөн Chef DB шийднэ
+        if (!isDemoMode()) return () => undefined;
+
         const tick = () => {
           const now = Date.now();
 
@@ -394,3 +469,61 @@ export const useOrderStore = create<OrderState>()(
     }
   )
 );
+
+/**
+ * Хэрэглэгч солигдоход өмнөх хэрэглэгчийн захиалгыг төхөөрөмжөөс цэвэрлэнэ.
+ *
+ * Захиалга нь хүргэлтийн хаяг, утас, худалдан авсан барааны жагсаалтыг агуулдаг.
+ * Дэлгэц дээр `userId`-аар шүүдэг ч өгөгдөл нь localStorage дээр үлдсээр байвал
+ * нэг төхөөрөмжийг хуваалцсан хоёр дахь хэрэглэгч түүнийг уншиж чадна.
+ *
+ * Гарах үед (account → null) устгахгүй — тухайн хүн буцаад нэвтэрвэл түүхээ
+ * хэвээр олно. Зөвхөн ӨӨР хэрэглэгч нэвтрэхэд цэвэрлэнэ.
+ */
+let lastKnownUserId: string | null = useAuthStore.getState().account?.id ?? null;
+
+useAuthStore.subscribe((state) => {
+  const currentUserId = state.account?.id ?? null;
+  if (currentUserId === null || currentUserId === lastKnownUserId) {
+    if (currentUserId !== null) lastKnownUserId = currentUserId;
+    return;
+  }
+
+  const previousUserId = lastKnownUserId;
+  lastKnownUserId = currentUserId;
+  if (previousUserId === null) return;
+
+  useOrderStore.setState((current) => ({
+    orders: current.orders.filter((order) => order.userId === currentUserId),
+    chefOrdersFetchedAt: null,
+  }));
+});
+
+/**
+ * Одоогийн хэрэглэгчид харагдах захиалгууд.
+ *
+ * `useOrderStore((s) => s.getVisibleOrders(id))` гэж шууд дуудаж БОЛОХГҮЙ —
+ * selector дуудалт бүрт шинэ массив буцаадаг тул React дахин render-ийн
+ * давталтад ордог. Энд эх өгөгдөл өөрчлөгдсөн үед л шинэ массив үүснэ.
+ */
+export function useVisibleOrders(): Order[] {
+  const account = useAuthStore((state) => state.account);
+  const orders = useOrderStore((state) => state.orders);
+  const userId = account?.id ?? null;
+
+  return useMemo(
+    () => orders.filter((order) => order.userId === userId || order.userId === null),
+    [orders, userId]
+  );
+}
+
+/** Идэвхтэй (хаагдаагүй) захиалгын тоо — цэсний badge-д ашиглана */
+export function useActiveOrderCount(): number {
+  const orders = useVisibleOrders();
+
+  return useMemo(
+    () =>
+      orders.filter((order) => order.status !== 'delivered' && order.status !== 'cancelled').length,
+    [orders]
+  );
+}

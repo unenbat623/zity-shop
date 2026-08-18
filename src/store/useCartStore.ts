@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CartItem, DeliveryMode, Product, RecipeBundle } from '../types';
 import { useCatalogStore } from './useCatalogStore';
+import { useToastStore } from './useToastStore';
 
 /**
  * Сагсны төлөв.
@@ -17,6 +18,13 @@ export const DELIVERY_FEE = 3_000;
 /** Хүргэлтийн хамгийн бага захиалгын дүн */
 export const MIN_ORDER_AMOUNT = 10_000;
 
+/**
+ * ⚠️ Купонууд одоогоор frontend дээр байна — bundle-ээс уншигдана.
+ *
+ * Мөн нийт дүнг client тооцоод backend руу илгээдэг тул хэрэглэгч дүнг
+ * өөрчилж чадна. Production-д купоны хүчинтэй байдал болон эцсийн дүнг
+ * ЗААВАЛ сервер талд дахин тооцох ёстой (docs/production-audit.md, #11).
+ */
 const COUPONS: Record<string, number> = {
   ZITYCHEF2026: 10,
   ZITY10: 10,
@@ -46,6 +54,16 @@ interface CartState {
   setPickupTime: (time: string | null) => void;
   applyCoupon: (code: string) => CartActionResult;
   removeCoupon: () => void;
+
+  /**
+   * Сагсны барааг каталогийн одоогийн үнэ/нөөцтэй тааруулна.
+   * Өөрчлөгдсөн зүйлсийн тайланг буцаана — UI хэрэглэгчид мэдэгдэнэ.
+   */
+  reconcileWithCatalog: (catalog: Product[]) => {
+    repriced: string[];
+    unavailable: string[];
+    reducedQuantity: string[];
+  };
 
   getItemQuantity: (productId: string) => number;
   getSubtotal: () => number;
@@ -260,6 +278,55 @@ export const useCartStore = create<CartState>()(
 
       removeCoupon: () => set({ couponCode: '', discountPercentage: 0 }),
 
+      /**
+       * Сагсны барааг каталогтой тулгаж шинэчилнэ.
+       *
+       * Сагс localStorage-д барааны БҮТЭН хуулбарыг хадгалдаг тул хэрэглэгч
+       * хоёр өдрийн өмнөх үнээр захиалга өгөх, дууссан барааг сагслах эрсдэлтэй
+       * байв. Каталог ачаалагдах бүрт үнэ, нөөц, нэр, зургийг шинэчилж,
+       * каталогт олдохоо больсон барааг тэмдэглэнэ.
+       *
+       * Тааруулах дараалал: ID → SKU → нэр. Chef live каталог болон локал
+       * каталогийн ID өөр байдаг тул зөвхөн ID-гаар тааруулбал офлайноос
+       * онлайн руу шилжихэд сагс бүхэлдээ "байхгүй" болно.
+       */
+      reconcileWithCatalog: (catalog) => {
+        const repriced: string[] = [];
+        const unavailable: string[] = [];
+        const reducedQuantity: string[] = [];
+
+        if (catalog.length === 0) return { repriced, unavailable, reducedQuantity };
+
+        const bySku = new Map(catalog.filter((product) => product.sku).map((p) => [p.sku, p]));
+        const byName = new Map(catalog.map((product) => [product.name.toLowerCase(), product]));
+
+        set((state) => ({
+          items: state.items.map((item) => {
+            const match =
+              catalog.find((product) => product.id === item.id) ??
+              bySku.get(item.sku) ??
+              byName.get(item.name.toLowerCase());
+
+            if (!match) {
+              if (!item.isUnavailable) unavailable.push(item.name);
+              return { ...item, isUnavailable: true, stock: 0 };
+            }
+
+            const previousUnitPrice = unitPrice(item);
+            const nextUnitPrice = unitPrice(match);
+            if (previousUnitPrice !== nextUnitPrice) repriced.push(match.name);
+
+            const quantity = Math.min(item.quantity, match.stock);
+            if (quantity < item.quantity) reducedQuantity.push(match.name);
+
+            // Каталогийн бүх шинэ талбарыг авч, зөвхөн тоо ширхгийг өөрсдөө барина
+            return { ...match, quantity, isUnavailable: false };
+          }),
+        }));
+
+        return { repriced, unavailable, reducedQuantity };
+      },
+
       getItemQuantity: (productId) =>
         get().items.find((item) => item.id === productId)?.quantity ?? 0,
 
@@ -291,6 +358,11 @@ export const useCartStore = create<CartState>()(
 
         if (items.length === 0) return 'Сагс хоосон байна.';
 
+        const missing = items.find((item) => item.isUnavailable);
+        if (missing) {
+          return `"${missing.name}" бараа дэлгүүрт байхгүй болсон байна. Сагснаас хасна уу.`;
+        }
+
         const overStock = items.find((item) => item.quantity > item.stock);
         if (overStock) {
           return `"${overStock.name}" барааны нөөц хүрэлцэхгүй байна (${overStock.stock} ${overStock.unit}).`;
@@ -319,3 +391,29 @@ export const useCartStore = create<CartState>()(
     }
   )
 );
+
+/**
+ * Каталог шинэчлэгдэх бүрт сагсыг автоматаар тааруулна.
+ *
+ * Хэрэглэгч ямар ч дэлгэц дээр байсан (сагсаа нээгээгүй ч) checkout хийхэд
+ * үнэ, нөөц нь одоогийн бодит утга байх ёстой. Өөрчлөлт гарвал чимээгүй
+ * өнгөрөхгүй — юу яагаад өөрчлөгдсөнийг тодорхой хэлнэ.
+ */
+useCatalogStore.subscribe((state, previous) => {
+  if (state.products === previous.products) return;
+  if (useCartStore.getState().items.length === 0) return;
+
+  const { repriced, unavailable, reducedQuantity } = useCartStore
+    .getState()
+    .reconcileWithCatalog(state.products);
+
+  const notices = [
+    unavailable.length > 0 ? `дэлгүүрт байхгүй болсон: ${unavailable.join(', ')}` : '',
+    repriced.length > 0 ? `үнэ шинэчлэгдсэн: ${repriced.join(', ')}` : '',
+    reducedQuantity.length > 0 ? `нөөцөөр хязгаарлагдсан: ${reducedQuantity.join(', ')}` : '',
+  ].filter(Boolean);
+
+  if (notices.length > 0) {
+    useToastStore.getState().show(`Сагс шинэчлэгдлээ — ${notices.join('; ')}.`, 'warning');
+  }
+});

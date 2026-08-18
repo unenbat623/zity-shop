@@ -21,13 +21,30 @@ import { AppShell } from '../components/AppShell';
 import { PaymentModal } from '../components/PaymentModal';
 import { DeliveryAddress, PaymentMethod } from '../types';
 import { formatMnt } from '../lib/format';
+import { isDemoMode } from '../lib/env';
 
-const PAYMENT_OPTIONS: { id: PaymentMethod; label: string; icon: typeof QrCode; desc: string }[] = [
-  { id: 'qpay', label: 'QPay QR', icon: QrCode, desc: 'Бүх банкны аппаар' },
-  { id: 'socialpay', label: 'SocialPay', icon: Smartphone, desc: 'Голомт банкны апп' },
-  { id: 'monpay', label: 'MonPay', icon: Smartphone, desc: 'Мобиком түрийвч' },
-  { id: 'card', label: 'Банкны карт', icon: CreditCard, desc: 'Visa, MasterCard' },
-  { id: 'cod', label: 'Хүргэлтээр бэлнээр', icon: Banknote, desc: 'Хүлээн авахдаа төлнө' },
+/**
+ * `requiresGateway` — бодит төлбөрийн үйлчилгээ (QPay merchant, банкны эквайринг)
+ * шаардана. Тэр интеграц хийгдтэл эдгээр нь ЗӨВХӨН демо горимд ажиллана.
+ */
+const PAYMENT_OPTIONS: {
+  id: PaymentMethod;
+  label: string;
+  icon: typeof QrCode;
+  desc: string;
+  requiresGateway: boolean;
+}[] = [
+  { id: 'qpay', label: 'QPay QR', icon: QrCode, desc: 'Бүх банкны аппаар', requiresGateway: true },
+  { id: 'socialpay', label: 'SocialPay', icon: Smartphone, desc: 'Голомт банкны апп', requiresGateway: true },
+  { id: 'monpay', label: 'MonPay', icon: Smartphone, desc: 'Мобиком түрийвч', requiresGateway: true },
+  { id: 'card', label: 'Банкны карт', icon: CreditCard, desc: 'Visa, MasterCard', requiresGateway: true },
+  {
+    id: 'cod',
+    label: 'Хүргэлтээр бэлнээр',
+    icon: Banknote,
+    desc: 'Хүлээн авахдаа төлнө',
+    requiresGateway: false,
+  },
 ];
 
 /** Онлайн төлбөрийн цонх нээх шаардлагатай хэлбэрүүд */
@@ -57,7 +74,14 @@ export function CheckoutScreen() {
 
   const { createOrder, isCreating } = useOrderStore();
 
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('qpay');
+  /**
+   * Демо унтарсан үед онлайн төлбөр боломжгүй тул бэлнээр төлөхийг үндсэн
+   * сонголт болгоно — хэрэглэгч дарж чадахгүй товч ширтэж суухгүй.
+   */
+  const isPaymentSimulated = isDemoMode();
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    isPaymentSimulated ? 'qpay' : 'cod'
+  );
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   const totalPrice = getTotalPrice();
@@ -79,22 +103,52 @@ export function CheckoutScreen() {
     [account?.phone]
   );
 
+  /**
+   * Захиалга амжилттай үүсэхэд сагс цэвэрлэгддэг.
+   *
+   * Тэр агшинд "сагс хоосон" гэсэн эффект ажиллаж хэрэглэгчийг `/cart` руу
+   * шидвэл шинэ захиалгын хуудас руу орж чадахгүй. Тиймээс захиалга үүссэн
+   * эсэхийг тэмдэглээд, тэр үед шилжүүлэлтийг хийхгүй.
+   */
+  const [isOrderPlaced, setIsOrderPlaced] = useState(false);
+
   // Сагс хоосон бол буцаана — render дундуур биш, effect дотор
   useEffect(() => {
-    if (items.length === 0 && !isCreating) {
+    if (items.length === 0 && !isCreating && !isOrderPlaced) {
       navigate('/cart', { replace: true });
     }
-  }, [items.length, isCreating, navigate]);
+  }, [items.length, isCreating, isOrderPlaced, navigate]);
 
   if (items.length === 0) return null;
 
   const requiresAddress = deliveryMode === 'delivery';
   const missingAddress = requiresAddress && !selectedAddress;
-  const blockingIssue = checkoutIssue || (missingAddress ? 'Хүргэлтийн хаягаа сонгоно уу.' : null);
+
+  /**
+   * Очиж авах захиалгад ч холбоо барих утас зайлшгүй.
+   * Утасгүй захиалга бэлэн болоход хэрэглэгчид мэдэгдэх арга байхгүй болно.
+   */
+  const missingPickupPhone = !requiresAddress && !pickupAddress.phone.trim();
+
+  const blockingIssue =
+    checkoutIssue ??
+    (missingAddress
+      ? 'Хүргэлтийн хаягаа сонгоно уу.'
+      : missingPickupPhone
+        ? 'Холбоо барих утсаа профайл дээрээ нэмнэ үү.'
+        : null);
 
   const handlePlaceOrderClick = () => {
     if (blockingIssue) {
       showToast(blockingIssue, 'warning');
+      return;
+    }
+
+    // Демо унтарсан үед онлайн төлбөр боломжгүй — сонголт ямар нэг байдлаар
+    // тэнд хүрсэн ч захиалгыг "төлөгдсөн" гэж бүртгэхгүй
+    const selectedOption = PAYMENT_OPTIONS.find((option) => option.id === paymentMethod);
+    if (selectedOption?.requiresGateway && !isPaymentSimulated) {
+      showToast('Энэ төлбөрийн хэлбэр одоогоор боломжгүй байна.', 'warning');
       return;
     }
 
@@ -127,6 +181,7 @@ export function CheckoutScreen() {
       couponCode: couponCode || undefined,
     });
 
+    setIsOrderPlaced(true);
     clearCart();
 
     if (order.odooSync.status === 'failed' || order.chefSync.status === 'failed') {
@@ -151,8 +206,9 @@ export function CheckoutScreen() {
           <Database className="h-3.5 w-3.5" /> Odoo sale.order
         </span>
       }
+      stickyFooterHideFrom="md"
       stickyFooter={
-        <div className="flex items-center justify-between gap-4 md:hidden">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <span className="block text-[10px] font-bold text-text-muted">Нийт төлөх</span>
             <span className="text-xl font-extrabold text-emerald-600">{formatMnt(totalPrice)}</span>
@@ -204,24 +260,27 @@ export function CheckoutScreen() {
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2" role="radiogroup" aria-label="Хүргэлтийн хаяг">
                     {addresses.map((address, index) => {
                       const isSelected = index === selectedAddressIndex;
                       return (
                         <button
                           key={address.id}
+                          type="button"
+                          role="radio"
                           onClick={() => setSelectedAddressIndex(index)}
                           className={`flex w-full items-start gap-3 rounded-2xl border p-3 text-left transition-all ${
                             isSelected
                               ? 'border-emerald-500 bg-emerald-500/10'
                               : 'border-border bg-surface-hover hover:border-emerald-500/30'
                           }`}
-                          aria-pressed={isSelected}
+                          aria-checked={isSelected}
                         >
                           <span
                             className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
                               isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-text-subtle'
                             }`}
+                            aria-hidden="true"
                           >
                             {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
                           </span>
@@ -254,6 +313,21 @@ export function CheckoutScreen() {
                 <p className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
                   <Clock className="h-3.5 w-3.5" /> Очих цаг: {pickupTime || 'сонгоогүй'}
                 </p>
+
+                {missingPickupPhone && (
+                  <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3">
+                    <p className="mb-2 flex items-start gap-1.5 text-[11px] font-semibold text-amber-600">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      Захиалга бэлэн болоход холбогдох утас алга байна.
+                    </p>
+                    <button
+                      onClick={() => navigate('/profile')}
+                      className="zity-btn-primary px-4 py-2 text-xs"
+                    >
+                      Утас нэмэх
+                    </button>
+                  </div>
+                )}
               </section>
             )}
 
@@ -263,33 +337,47 @@ export function CheckoutScreen() {
                 <CreditCard className="h-4 w-4 text-emerald-500" /> Төлбөрийн хэлбэр
               </h2>
 
-              <div className="space-y-2">
+              {!isPaymentSimulated && (
+                <p className="flex items-start gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-2.5 text-[11px] font-semibold leading-relaxed text-amber-600">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Онлайн төлбөрийн систем хараахан холбогдоогүй байна. Одоогоор зөвхөн хүргэлтээр
+                  бэлнээр төлөх боломжтой.
+                </p>
+              )}
+
+              <div className="space-y-2" role="radiogroup" aria-label="Төлбөрийн хэлбэр">
                 {PAYMENT_OPTIONS.map((option) => {
                   const Icon = option.icon;
                   const isSelected = paymentMethod === option.id;
+                  const isDisabled = option.requiresGateway && !isPaymentSimulated;
 
                   return (
                     <button
                       key={option.id}
-                      onClick={() => setPaymentMethod(option.id)}
-                      className={`flex w-full items-center justify-between rounded-2xl border p-3.5 text-xs transition-all ${
+                      type="button"
+                      role="radio"
+                      onClick={() => !isDisabled && setPaymentMethod(option.id)}
+                      disabled={isDisabled}
+                      className={`flex w-full items-center justify-between gap-3 rounded-2xl border p-3.5 text-xs transition-all ${
                         isSelected
                           ? 'border-emerald-500 bg-emerald-500/10 font-bold text-emerald-600'
                           : 'border-border bg-surface font-medium text-text-main hover:bg-surface-hover'
-                      }`}
-                      aria-pressed={isSelected}
+                      } ${isDisabled ? 'cursor-not-allowed opacity-45 hover:bg-surface' : ''}`}
+                      aria-checked={isSelected}
                     >
-                      <span className="flex items-center gap-3">
+                      <span className="flex min-w-0 items-center gap-3">
                         <span
-                          className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
                             isSelected ? 'bg-emerald-600 text-white' : 'bg-surface-hover text-text-muted'
                           }`}
                         >
                           <Icon className="h-4 w-4" />
                         </span>
-                        <span className="text-left">
-                          <span className="block text-xs font-bold sm:text-sm">{option.label}</span>
-                          <span className="block text-[11px] text-text-muted">{option.desc}</span>
+                        <span className="min-w-0 text-left">
+                          <span className="block truncate text-xs font-bold sm:text-sm">{option.label}</span>
+                          <span className="block truncate text-[11px] text-text-muted">
+                            {isDisabled ? 'Тун удахгүй' : option.desc}
+                          </span>
                         </span>
                       </span>
 
@@ -297,6 +385,7 @@ export function CheckoutScreen() {
                         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
                           isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-text-subtle'
                         }`}
+                        aria-hidden="true"
                       >
                         {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
                       </span>
@@ -308,6 +397,12 @@ export function CheckoutScreen() {
               {paymentMethod === 'cod' && (
                 <p className="rounded-xl border border-border bg-surface-hover p-2.5 text-[11px] text-text-muted">
                   Бэлнээр төлөх захиалга хүргэгдэх үед төлөгдсөнд тооцогдоно.
+                </p>
+              )}
+
+              {isPaymentSimulated && paymentMethod !== 'cod' && (
+                <p className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-2.5 text-[11px] font-semibold text-amber-600">
+                  ⚠️ Демо горим — бодит гүйлгээ хийгдэхгүй.
                 </p>
               )}
             </section>

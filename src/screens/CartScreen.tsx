@@ -118,8 +118,9 @@ export function CartScreen() {
           <Database className="h-3.5 w-3.5" /> Нөөцтэй тулгасан
         </span>
       }
+      stickyFooterHideFrom="md"
       stickyFooter={
-        <div className="flex items-center justify-between gap-4 md:hidden">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <span className="block text-[10px] font-bold text-text-muted">Нийт төлөх</span>
             <span className="text-xl font-extrabold text-emerald-600">{formatMnt(getTotalPrice())}</span>
@@ -233,13 +234,18 @@ export function CartScreen() {
             {/* Барааны жагсаалт */}
             <div className="space-y-3">
               {items.map((item) => {
-                const isOverStock = item.quantity > item.stock;
+                const isUnavailable = item.isUnavailable === true;
+                const isOverStock = !isUnavailable && item.quantity > item.stock;
 
                 return (
                   <div
                     key={item.id}
                     className={`flex items-center gap-3 rounded-3xl border bg-surface p-3 shadow-xs sm:p-4 ${
-                      isOverStock ? 'border-amber-500/40' : 'border-border'
+                      isUnavailable
+                        ? 'border-red-500/40'
+                        : isOverStock
+                          ? 'border-amber-500/40'
+                          : 'border-border'
                     }`}
                   >
                     <img
@@ -269,10 +275,17 @@ export function CartScreen() {
                         </button>
                       </div>
 
-                      {isOverStock && (
-                        <p className="mt-1 flex items-center gap-1 text-[10px] font-bold text-amber-500">
-                          <AlertTriangle className="h-3 w-3" /> Нөөц {item.stock} {item.unit} л байна
+                      {isUnavailable ? (
+                        <p className="mt-1 flex items-center gap-1 text-[10px] font-bold text-red-500">
+                          <AlertTriangle className="h-3 w-3 shrink-0" /> Дэлгүүрт байхгүй болсон —
+                          сагснаас хасна уу
                         </p>
+                      ) : (
+                        isOverStock && (
+                          <p className="mt-1 flex items-center gap-1 text-[10px] font-bold text-amber-500">
+                            <AlertTriangle className="h-3 w-3" /> Нөөц {item.stock} {item.unit} л байна
+                          </p>
+                        )
                       )}
 
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">

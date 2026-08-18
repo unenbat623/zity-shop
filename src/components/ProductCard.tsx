@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { Product } from '../types';
 import { useCartStore } from '../store/useCartStore';
@@ -27,35 +27,40 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
     ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
     : 0;
 
-  const handleAdd = (event: React.MouseEvent) => {
-    event.stopPropagation();
+  const handleAdd = () => {
     const result = addItem(product);
     // Амжилттай нэмэхэд toast гаргахгүй — тоо шууд өөрчлөгдөж харагдана.
     // Зөвхөн саад тохиолдвол шалтгааныг мэдэгдэнэ.
     if (!result.ok) showToast(result.message, 'warning');
   };
 
-  const handleRemove = (event: React.MouseEvent) => {
-    event.stopPropagation();
+  const handleRemove = () => {
     decreaseQuantity(product.id);
   };
 
+  /*
+    Бүтэц: гадна нь энгийн `article`, дотор нь ХОЁР тусдаа интерактив бүс —
+    (1) дэлгэрэнгүй нээх товч, (2) сагсны удирдлага.
+
+    Өмнө нь бүх карт `role="button"` байсан ба дотор нь "+/−" товчнууд байв.
+    Интерактив элемент дотор интерактив элемент байх нь HTML-д хүчингүй —
+    screen reader картыг нэг товч гэж уншиж, Tab-аар доторх товчнууд руу
+    орох нь ойлгомжгүй болдог байв.
+  */
   return (
-    <div
-      onClick={() => onClick(product)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick(product);
-        }
-      }}
-      aria-label={`${product.name}, ${formatMnt(product.discountPrice ?? product.price)}`}
-      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-xs transition-all hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-lg active:scale-[0.98] ${
+    <article
+      className={`group relative flex flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-xs transition-all hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-lg ${
         isOutOfStock ? 'opacity-70' : ''
       }`}
     >
+      <button
+        type="button"
+        onClick={() => onClick(product)}
+        aria-label={`${product.name}, ${formatMnt(
+          product.discountPrice ?? product.price
+        )} — дэлгэрэнгүй`}
+        className="flex flex-1 cursor-pointer flex-col text-left active:scale-[0.99]"
+      >
       <div className="relative aspect-square w-full overflow-hidden bg-surface-hover">
         {!imageLoaded && !imageFailed && <Skeleton className="absolute inset-0" />}
 
@@ -85,12 +90,12 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
         {(product.isMongolian || product.isOrganic) && (
           <div className="absolute right-2.5 top-2.5 flex flex-col gap-1">
             {product.isMongolian && (
-              <span className="rounded-full bg-blue-600/90 px-2 py-0.5 text-[9px] font-black text-white backdrop-blur-md">
+              <span className="rounded-full bg-blue-600/90 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur-md">
                 🇲🇳 МН
               </span>
             )}
             {product.isOrganic && (
-              <span className="rounded-full bg-emerald-600/90 px-2 py-0.5 text-[9px] font-black text-white backdrop-blur-md">
+              <span className="rounded-full bg-emerald-600/90 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur-md">
                 🌿 OG
               </span>
             )}
@@ -103,32 +108,35 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           </div>
         ) : (
           isLowStock && (
-            <div className="absolute inset-x-2 bottom-2 rounded-full bg-amber-500/90 py-0.5 text-center text-[9px] font-black text-slate-950 backdrop-blur-md">
+            <div className="absolute inset-x-2 bottom-2 rounded-full bg-amber-500/90 py-0.5 text-center text-[10px] font-black text-slate-950 backdrop-blur-md">
               ⚠ {product.stock} {product.unit} үлдлээ
             </div>
           )
         )}
       </div>
 
-      <div className="flex flex-1 flex-col p-3.5 sm:p-4">
+      <div className="flex flex-1 flex-col px-3.5 pt-3.5 sm:px-4 sm:pt-4">
         <div className="mb-1 flex items-center justify-between gap-1 text-[10px] font-bold text-emerald-600">
           <span className="truncate">{product.category}</span>
           {product.sku && (
-            <span className="shrink-0 font-mono text-[9px] text-text-subtle">{product.sku}</span>
+            <span className="shrink-0 font-mono text-[10px] text-text-subtle">{product.sku}</span>
           )}
         </div>
 
-        <h3 className="mb-3 line-clamp-2 text-xs font-bold leading-snug text-text-main sm:text-sm">
+        <h3 className="line-clamp-2 text-xs font-bold leading-snug text-text-main sm:text-sm">
           {product.name}
         </h3>
+      </div>
+      </button>
 
+      <div className="px-3.5 pb-3.5 sm:px-4 sm:pb-4">
         {/*
           Үнэ ба үйлдлийг ДЭЭР-ДООР байрлуулна.
           Хажуу тийш байрлуулбал картын доторх өргөн (жижиг дэлгэцэнд ~100px)
           хоёуланд нь хүрэлцэхгүй тул үнэ шахагдаж, текст нь тоо ширхгийн
           удирдлага дээр халин гардаг байв.
         */}
-        <div className="mt-auto space-y-2 border-t border-border/60 pt-2">
+        <div className="mt-3 space-y-2 border-t border-border/60 pt-2">
           <div className="flex flex-wrap items-baseline gap-x-1.5">
             {product.discountPrice ? (
               <>
@@ -144,7 +152,7 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
                 {formatMnt(product.price)}
               </span>
             )}
-            <span className="text-[9px] font-semibold text-text-subtle">/ {product.unit}</span>
+            <span className="text-[10px] font-semibold text-text-subtle">/ {product.unit}</span>
           </div>
 
           {isOutOfStock ? (
@@ -182,6 +190,6 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }

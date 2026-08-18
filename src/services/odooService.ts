@@ -14,7 +14,7 @@
 
 import { ApiError, chefRequest } from './apiClient';
 import { OdooConfig, OdooSyncLog, Order, Product } from '../types';
-import { env } from '../lib/env';
+import { env, isDemoMode } from '../lib/env';
 import { MOCK_PRODUCTS } from '../constants/mockData';
 
 export type OdooMode = 'bridge' | 'simulated';
@@ -129,7 +129,12 @@ class OdooService {
 
   /**
    * Захиалгыг Odoo `sale.order` болгож бүртгэнэ.
-   * Bridge байхгүй үед симуляцын reference үүсгэнэ — UI урсгал тасрахгүй.
+   *
+   * Bridge байхгүй үед:
+   *   - демо горимд — симуляцын reference үүсгээд `success: true` (UI урсгал тасрахгүй)
+   *   - production-д — `success: false`. ERP дээр захиалга үүсээгүй атлаа "амжилттай"
+   *     гэж харуулбал ажилтан захиалгыг хаанаас ч олохгүй, хэрэглэгч хүлээсээр
+   *     үлдэнэ. Тиймээс илэн далангүй амжилтгүй гэж тэмдэглэнэ.
    */
   async pushOrderToOdoo(order: Order): Promise<{ odooOrderRef: string; success: boolean; mode: OdooMode }> {
     try {
@@ -171,16 +176,25 @@ class OdooService {
       return { odooOrderRef, success: true, mode: 'bridge' };
     } catch {
       this.mode = 'simulated';
-      const odooOrderRef = `SIM-SO-${new Date().getFullYear()}-${order.id.slice(-4)}`;
+      this.config.isConnected = false;
+
+      if (isDemoMode()) {
+        const odooOrderRef = `SIM-SO-${new Date().getFullYear()}-${order.id.slice(-4)}`;
+        this.addLog(
+          'Odoo захиалга үүсгэх',
+          'warning',
+          `Odoo bridge олдсонгүй. ${order.id} захиалгад ДЕМО reference (${odooOrderRef}) олголоо.`
+        );
+        return { odooOrderRef, success: true, mode: 'simulated' };
+      }
 
       this.addLog(
         'Odoo захиалга үүсгэх',
-        'warning',
-        `Odoo bridge олдсонгүй. ${order.id} захиалгад симуляц reference (${odooOrderRef}) олголоо.`
+        'error',
+        `Odoo bridge олдсонгүй. ${order.id} захиалга ERP дээр бүртгэгдээгүй — дахин илгээх шаардлагатай.`
       );
 
-      // Симуляц бол ч захиалга үргэлжлэх ёстой тул success=true
-      return { odooOrderRef, success: true, mode: 'simulated' };
+      return { odooOrderRef: 'Синк амжилтгүй', success: false, mode: 'simulated' };
     }
   }
 

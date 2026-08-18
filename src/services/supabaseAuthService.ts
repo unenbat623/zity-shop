@@ -9,7 +9,12 @@
  * Frontend-д зөвхөн public anon key ашиглана. Service role key энд ХЭЗЭЭ Ч орохгүй.
  */
 
-import type { AuthError as SupabaseAuthError, Session, User } from '@supabase/supabase-js';
+import type {
+  AuthChangeEvent,
+  AuthError as SupabaseAuthError,
+  Session,
+  User,
+} from '@supabase/supabase-js';
 
 import { supabase } from '../lib/supabaseClient';
 import { getAuthRedirectUrl, getSupabaseConfigError, isSupabaseConfigured } from '../lib/env';
@@ -290,6 +295,22 @@ export const SupabaseAuthService = {
   },
 
   /**
+   * Шинэ нууц үг тавих.
+   *
+   * Сэргээх имэйлийн холбоосоор орж ирсэн хэрэглэгч түр session-той болдог —
+   * тэр session дээр л нууц үгээ солих боломжтой. Энэ алхмыг гүйцэтгэхгүй бол
+   * хэрэглэгч зүгээр нэвтэрчихээд хуучин нууц үгтэйгээ үлддэг.
+   */
+  async updatePassword(password: string): Promise<AuthAccount | null> {
+    const client = requireClient();
+
+    const { data, error } = await client.auth.updateUser({ password });
+    if (error) throw new AuthError(translateAuthError(error), 'password_update_failed');
+
+    return data.user ? toAccount(data.user) : null;
+  },
+
+  /**
    * OAuth callback-ийн URL дээр auth-ийн мэдээлэл байсан эсэхийг хэлнэ.
    *
    * ⚠️ Энэ функц URL-ийг ӨӨРЧЛӨХГҮЙ. `detectSessionInUrl: true` тул supabase-js
@@ -368,12 +389,22 @@ export const SupabaseAuthService = {
     void supabase?.auth.signOut().catch(() => undefined);
   },
 
-  /** Session өөрчлөгдөхөд дуудагдана (жишээ нь өөр таб дээр гарсан үед) */
-  onAuthStateChange(callback: (account: AuthAccount | null) => void): () => void {
+  /**
+   * Session-ы өөрчлөлтийг сонсоно.
+   *
+   * Юуг барих вэ:
+   *   - `SIGNED_OUT` — өөр таб дээр эсвэл Zity Chef дээр гарсан
+   *   - `TOKEN_REFRESHED` — token сунгагдсан (account шинэчлэгдэнэ)
+   *   - `PASSWORD_RECOVERY` — сэргээх холбоосоор орж ирсэн, шинэ нууц үг тавих ёстой
+   *   - `USER_UPDATED` — профайл/нууц үг өөрчлөгдсөн
+   */
+  onAuthStateChange(
+    callback: (account: AuthAccount | null, event: AuthChangeEvent) => void
+  ): () => void {
     if (!supabase) return () => undefined;
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      callback(session?.user ? toAccount(session.user) : null);
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      callback(session?.user ? toAccount(session.user) : null, event);
     });
 
     return () => data.subscription.unsubscribe();

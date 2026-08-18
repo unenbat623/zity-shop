@@ -23,7 +23,7 @@ import {
 
 import { AppShell } from '../components/AppShell';
 import { useAuthStore, useUserProfile } from '../store/useAuthStore';
-import { useOrderStore } from '../store/useOrderStore';
+import { useVisibleOrders } from '../store/useOrderStore';
 import { useCatalogStore } from '../store/useCatalogStore';
 import { useToastStore } from '../store/useToastStore';
 import { DeliveryAddress } from '../types';
@@ -62,14 +62,13 @@ export function ProfileScreen() {
   const { setSelectedAddressIndex, addAddress, updateAddress, removeAddress, toggleZityChefConnection, signOut } =
     useAuthStore();
 
-  const orders = useOrderStore((state) => state.orders);
+  const myOrders = useVisibleOrders();
   const connection = useCatalogStore((state) => state.connection);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [draft, setDraft] = useState<AddressDraft>(EMPTY_DRAFT);
 
-  const myOrders = orders.filter((order) => order.userId === (account?.id ?? null));
   const totalSpend = myOrders
     .filter((order) => order.paymentStatus === 'paid')
     .reduce((sum, order) => sum + order.totalAmount, 0);
@@ -175,7 +174,7 @@ export function ProfileScreen() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-[9px] uppercase text-emerald-200">Нийт зарцуулсан</p>
+                <p className="text-[10px] uppercase text-emerald-200">Нийт зарцуулсан</p>
                 <p className="text-sm font-extrabold text-white">{formatMnt(totalSpend)}</p>
               </div>
             </div>
@@ -353,7 +352,7 @@ export function ProfileScreen() {
             </form>
           )}
 
-          <div className="space-y-2 p-3">
+          <div className="space-y-2 p-3" role="radiogroup" aria-label="Хадгалсан хаягууд">
             {profile.addresses.length === 0 ? (
               <p className="py-6 text-center text-xs text-text-muted">
                 Хаяг хадгалаагүй байна. Захиалга өгөхийн тулд хаягаа нэмнэ үү.
@@ -371,9 +370,11 @@ export function ProfileScreen() {
                     }`}
                   >
                     <button
+                      type="button"
+                      role="radio"
                       onClick={() => setSelectedAddressIndex(index)}
                       className="flex flex-1 items-start gap-3 text-left"
-                      aria-pressed={isSelected}
+                      aria-checked={isSelected}
                     >
                       <span
                         className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
@@ -388,7 +389,7 @@ export function ProfileScreen() {
                             {address.district}, {address.khoroo}
                           </span>
                           {address.label && (
-                            <span className="rounded-full border border-border bg-surface px-1.5 py-0.5 text-[9px] font-bold text-text-muted">
+                            <span className="rounded-full border border-border bg-surface px-1.5 py-0.5 text-[10px] font-bold text-text-muted">
                               {address.label}
                             </span>
                           )}

@@ -147,3 +147,67 @@ describe('тоо ширхэг өөрчлөх', () => {
     expect(useCartStore.getState().items).toHaveLength(0);
   });
 });
+
+describe('каталогтой тааруулах', () => {
+  it('үнэ өөрчлөгдсөн барааг шинэ үнээр шинэчилнэ', () => {
+    useCartStore.getState().addItem(makeProduct({ price: 10_000, stock: 10 }), 2);
+
+    const result = useCartStore
+      .getState()
+      .reconcileWithCatalog([makeProduct({ price: 12_000, stock: 10 })]);
+
+    expect(result.repriced).toEqual(['Туршилтын бараа']);
+    expect(useCartStore.getState().getSubtotal()).toBe(24_000);
+  });
+
+  it('хямдралтай болсон барааны хямдралт үнээр тооцно', () => {
+    useCartStore.getState().addItem(makeProduct({ price: 10_000, stock: 10 }), 1);
+
+    useCartStore
+      .getState()
+      .reconcileWithCatalog([makeProduct({ price: 10_000, discountPrice: 8_000, stock: 10 })]);
+
+    expect(useCartStore.getState().getSubtotal()).toBe(8_000);
+  });
+
+  it('каталогоос хасагдсан барааг тэмдэглэж checkout-г хаана', () => {
+    useCartStore.getState().addItem(makeProduct({ price: 30_000, stock: 10 }), 1);
+
+    const result = useCartStore.getState().reconcileWithCatalog([
+      makeProduct({ id: 'other', sku: 'OTHER-1', name: 'Өөр бараа' }),
+    ]);
+
+    expect(result.unavailable).toEqual(['Туршилтын бараа']);
+    expect(useCartStore.getState().items[0].isUnavailable).toBe(true);
+    expect(useCartStore.getState().getCheckoutIssue()).toContain('дэлгүүрт байхгүй болсон');
+  });
+
+  it('ID солигдсон ч SKU-гаар таарвал бараа алдагдахгүй', () => {
+    useCartStore.getState().addItem(makeProduct({ price: 10_000, stock: 10 }), 1);
+
+    const result = useCartStore
+      .getState()
+      .reconcileWithCatalog([makeProduct({ id: 'chef-uuid-1', price: 11_000, stock: 10 })]);
+
+    expect(result.unavailable).toHaveLength(0);
+    expect(useCartStore.getState().items[0].id).toBe('chef-uuid-1');
+    expect(useCartStore.getState().getSubtotal()).toBe(11_000);
+  });
+
+  it('нөөц багассан бол тоо ширхгийг буулгана', () => {
+    useCartStore.getState().addItem(makeProduct({ stock: 10 }), 6);
+
+    const result = useCartStore.getState().reconcileWithCatalog([makeProduct({ stock: 2 })]);
+
+    expect(result.reducedQuantity).toEqual(['Туршилтын бараа']);
+    expect(useCartStore.getState().getItemQuantity('p1')).toBe(2);
+  });
+
+  it('хоосон каталог сагсыг устгахгүй', () => {
+    useCartStore.getState().addItem(makeProduct(), 1);
+    const result = useCartStore.getState().reconcileWithCatalog([]);
+
+    expect(result.unavailable).toHaveLength(0);
+    expect(useCartStore.getState().items).toHaveLength(1);
+  });
+});

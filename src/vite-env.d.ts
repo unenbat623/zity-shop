@@ -7,6 +7,18 @@ interface ImportMetaEnv {
 
   readonly VITE_ZITY_CHEF_API_URL?: string;
 
+  /** Апп-ын public хаяг (OG/canonical). Жишээ: https://zity-shop.vercel.app */
+  readonly VITE_SITE_URL?: string;
+
+  /** OAuth-ийн дараа буцаж ирэх суурь хаяг. Хоосон = одоогийн origin */
+  readonly VITE_AUTH_REDIRECT_URL?: string;
+
+  /**
+   * Демо симуляц ('true' | 'false'). Production дээр 'false' байх ёстой —
+   * хуурамч төлбөр, хуурамч хүргэлтийн явцыг хаана.
+   */
+  readonly VITE_DEMO_MODE?: string;
+
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
 

@@ -14,11 +14,19 @@ export function ToastHost() {
 
   if (toasts.length === 0) return null;
 
+  /**
+   * Алдаа гарсныг хэрэглэгч ТУХАЙН АГШИНД мэдэх ёстой.
+   *
+   * `polite` нь screen reader-ийг одоо уншиж буй зүйлээ дуустал хүлээлгэдэг тул
+   * "төлбөр амжилтгүй" гэх мэт мэдээлэл хожуу, эсвэл огт хэлэгдэхгүй өнгөрдөг.
+   */
+  const hasUrgent = toasts.some((item) => item.variant === 'error' || item.variant === 'warning');
+
   return (
     <div
       className="pointer-events-none fixed inset-x-0 bottom-24 z-[60] flex flex-col items-center gap-2 px-4 md:bottom-6"
-      role="status"
-      aria-live="polite"
+      role={hasUrgent ? 'alert' : 'status'}
+      aria-live={hasUrgent ? 'assertive' : 'polite'}
     >
       {toasts.map((item) => {
         const style = VARIANT_STYLE[item.variant];

@@ -187,14 +187,15 @@ export function OdooAdminScreen() {
           <div className="flex gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-600">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              <span className="font-mono font-bold">VITE_ADMIN_EMAILS</span> тохируулаагүй тул нэвтэрсэн дурын
-              хэрэглэгч энэ хуудсыг үзэж чадна. Production дээр заавал admin имэйлүүдээ жагсаана уу.
+              <span className="font-mono font-bold">VITE_ADMIN_EMAILS</span> тохируулаагүй байна. Хөгжүүлэлтийн
+              орчинд энэ хуудас нээлттэй, харин production дээр ХААЛТТАЙ болно — deploy хийхээсээ өмнө admin
+              имэйлүүдээ заавал жагсаана уу.
             </span>
           </div>
         )}
 
         {/* KPI */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {[
             {
               label: 'Хэрэглэгчид',
@@ -278,7 +279,7 @@ export function OdooAdminScreen() {
                     <div key={label} className="rounded-2xl border border-border bg-surface-hover p-2.5">
                       <div className="mb-1 flex items-center gap-1">
                         <Icon className="h-3 w-3 text-emerald-500" />
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-text-muted">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
                           {label}
                         </span>
                       </div>
@@ -418,7 +419,7 @@ SMTP_PASSWORD=<app password>`}
                   >
                     <p className="font-mono text-[10px] font-bold text-text-main">{module}</p>
                     <p className="text-[10px] text-text-muted">{desc}</p>
-                    <span className={`text-[9px] font-extrabold ${active ? 'text-emerald-500' : 'text-text-muted'}`}>
+                    <span className={`text-[10px] font-extrabold ${active ? 'text-emerald-500' : 'text-text-muted'}`}>
                       {active ? 'Идэвхтэй' : 'Хүлээгдэж байна'}
                     </span>
                   </div>
@@ -551,7 +552,11 @@ SMTP_PASSWORD=<app password>`}
                   <h3 className="flex items-center gap-2 text-xs font-extrabold text-text-main">
                     <ShoppingBag className="h-4 w-4 text-emerald-500" /> Захиалгууд
                   </h3>
-                  <span className="text-[10px] font-bold text-text-muted">{orders.length} захиалга</span>
+                  {/* Энэ жагсаалт нь ЭНЭ ТӨХӨӨРӨМЖ дээрх захиалга — бүх хэрэглэгчийн
+                      захиалгын эх сурвалж нь Chef DB. Ялгааг нь тодорхой хэлнэ. */}
+                  <span className="text-[10px] font-bold text-text-muted">
+                    {orders.length} · энэ төхөөрөмж
+                  </span>
                 </div>
                 <div className="max-h-[420px] overflow-y-auto">
                   {orders.length === 0 ? (
@@ -641,7 +646,7 @@ function SyncDot({ label, state }: { label: string; state: 'pending' | 'success'
     state === 'success' ? 'bg-emerald-500' : state === 'failed' ? 'bg-red-500' : 'bg-amber-500';
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-1.5 py-0.5 text-[9px] font-bold text-text-muted">
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-1.5 py-0.5 text-[10px] font-bold text-text-muted">
       <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
       {label}
     </span>

@@ -25,6 +25,15 @@ interface AppShellProps {
   headerRight?: ReactNode;
   /** Агуулгын доор наалдах самбар (жишээ нь мобайл "Захиалах" товч) */
   stickyFooter?: ReactNode;
+  /**
+   * Наалдмал самбарыг энэ хэмжээнээс дээш нуух.
+   *
+   * Өргөн дэлгэц дээр ижил үйлдэл нь агуулгын дотор (жишээ нь дүнгийн картан
+   * дээр) байдаг. Самбарыг хуудас дотроос `md:hidden`-ээр нуувал AppShell мэдэхгүй
+   * тул доод padding нь хэвээр үлдэж, хоосон зай гарна — тиймээс нуух шийдвэрийг
+   * энд төвлөрүүлж, padding-ыг хамт тааруулна.
+   */
+  stickyFooterHideFrom?: 'md' | 'lg';
 }
 
 const MAX_WIDTH_CLASS: Record<NonNullable<AppShellProps['maxWidth']>, string> = {
@@ -53,6 +62,7 @@ export function AppShell({
   backTo,
   headerRight,
   stickyFooter,
+  stickyFooterHideFrom,
 }: AppShellProps) {
   const navigate = useNavigate();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -62,17 +72,40 @@ export function AppShell({
     else navigate(backTo);
   };
 
-  /** Доод наалдмал самбар + доод цэсэнд зай гаргана */
-  const bottomPadding = stickyFooter
-    ? hideBottomNav
-      ? 'pb-32 lg:pb-28'
-      : 'pb-44 lg:pb-28'
-    : hideBottomNav
-      ? 'pb-12'
-      : 'pb-28 lg:pb-12';
+  /**
+   * Доод наалдмал самбар + доод цэсэнд зай гаргана.
+   *
+   * Гурван зүйлийг зэрэг тооцно: доод цэс (`lg`-ээс доош харагдана), наалдмал
+   * самбар, мөн самбарыг хаана нуусан бэ. Аль нэгийг нь мартвал агуулга далдлагдах
+   * эсвэл эсрэгээрээ том хоосон зай үлдэнэ.
+   */
+  const bottomPadding = (() => {
+    if (!stickyFooter) return hideBottomNav ? 'pb-12' : 'pb-28 lg:pb-12';
+
+    if (stickyFooterHideFrom === 'md') {
+      // md-ээс дээш самбар алга: md дээр зөвхөн доод цэсний зай, lg дээр юу ч хэрэггүй
+      return hideBottomNav ? 'pb-32 md:pb-12' : 'pb-44 md:pb-28 lg:pb-12';
+    }
+    if (stickyFooterHideFrom === 'lg') {
+      return hideBottomNav ? 'pb-32 lg:pb-12' : 'pb-44 lg:pb-12';
+    }
+    return hideBottomNav ? 'pb-32 lg:pb-28' : 'pb-44 lg:pb-28';
+  })();
+
+  const stickyFooterHideClass =
+    stickyFooterHideFrom === 'md' ? 'md:hidden' : stickyFooterHideFrom === 'lg' ? 'lg:hidden' : '';
 
   return (
     <div className="min-h-screen bg-background text-text-main">
+      {/* Гарнаас удирддаг хэрэглэгч навигацийг бүхэлд нь Tab-даахгүйгээр
+          агуулга руу шууд үсрэх боломж. Focus авах хүртэл харагдахгүй. */}
+      <a
+        href="#zity-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-emerald-600 focus:px-4 focus:py-2 focus:text-xs focus:font-bold focus:text-white"
+      >
+        Агуулга руу шилжих
+      </a>
+
       <Sidebar />
       <SidebarDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
 
@@ -97,7 +130,11 @@ export function AppShell({
           <Header showSearch={showSearch} title={title} onOpenMenu={() => setIsDrawerOpen(true)} />
         )}
 
-        <main className={`mx-auto ${MAX_WIDTH_CLASS[maxWidth]} px-4 pt-4 sm:px-6 ${bottomPadding}`}>
+        <main
+          id="zity-main"
+          tabIndex={-1}
+          className={`mx-auto ${MAX_WIDTH_CLASS[maxWidth]} px-4 pt-4 outline-none sm:px-6 ${bottomPadding}`}
+        >
           {children}
         </main>
       </div>
@@ -106,7 +143,7 @@ export function AppShell({
         <div
           // `py-3` ба `pb-safe` хоёул padding-bottom тавьдаг тул аль нь давамгайлах
           // нь тодорхойгүй болдог — доод зайг нэг классаар шууд заана.
-          className={`fixed inset-x-0 z-30 border-t border-border bg-surface/95 px-4 pt-3 shadow-2xl backdrop-blur-md lg:left-64 ${
+          className={`fixed inset-x-0 z-30 border-t border-border bg-surface/95 px-4 pt-3 shadow-2xl backdrop-blur-md lg:left-64 ${stickyFooterHideClass} ${
             hideBottomNav
               ? 'bottom-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]'
               : 'bottom-[68px] pb-3 lg:bottom-0'
